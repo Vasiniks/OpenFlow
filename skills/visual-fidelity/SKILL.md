@@ -1,6 +1,6 @@
 ---
 name: visual-fidelity
-description: Measured render→compare→critique loop for frontend work. Captures a reference and the current build at fixed viewports, extracts element geometry/typography in vw/vh units, and produces pixel-diff hotspots, element deltas, omissions and unjustified extras. Use when recreating a reference site/screenshot, judging whether a UI matches a design, or before declaring any visual work done. Never judge visual quality without running this.
+description: Measured reverse-engineering and render→compare→critique loop for frontend work. `vf teardown` crawls a site with Playwright and extracts its intro, scroll motion map, hover/cursor behaviour, page transitions, library stack, GSAP/ScrollTrigger values from its JS, live three.js scene (lights/materials/tone mapping), compiled GLSL shaders and real asset files; `vf capture/compare/track` measure layout fidelity at fixed viewports with pixel diffs and element deltas. Use when recreating or taking inspiration from a reference site, judging whether a UI matches a design, or before declaring any visual work done.
 ---
 
 # Visual fidelity
@@ -20,6 +20,25 @@ $VF compare .design/ref .design/cur/iter-N --out .design/cur/iter-N/compare
 - `capture` writes `<W>x<H>[@scroll%].png` plus a `.json` layout report. The report lists salient media/text/boxes with their box in px **and** vw/vh, font family/size/weight/letter-spacing/color, backgrounds, SVG fill, radius, and position. It also records page background, loaded fonts, canvas count, overflow, and console errors.
 - `compare` writes `compare.md`: pixel mismatch %, the top-5 hotspot cells (e.g. `upper-right 38%`), an element-delta table (Δx vw, Δy vh, w×, h×, font ratio, family/weight/color changes, sorted by *impact*), **omissions** (in ref, missing in current) and **extras** (in current, unmatched in ref). It also writes `*.side-by-side.png` and `*.diff.png`.
 - **Screenshot-only reference:** put the PNGs in `.design/ref/` named `1440x900.png` etc. and capture the build at the same sizes. Pixel analysis still works. Element deltas need a URL reference; without one, read coordinates off the side-by-side.
+
+## Teardown: reverse-engineer a site (run it FIRST on any reference; run it on your own build before calling it done)
+
+```bash
+$VF teardown <url> --out .design/ref/teardown --pages 6      # ~1–5 min
+```
+Read `teardown.md` first, then LOOK at the evidence it lists. It records:
+- **Intro:** frames at 0.3–7 s plus `intro.webm`; when the intro finished.
+- **Scroll:** contact sheets of one continuous human-speed scroll (`scroll-sheet-*.png`, 20 frames per sheet), plus a screenshot per half-screen.
+- **Motion map:** every element that is **scroll-linked** (translate/scale/opacity/clip ranges), **revealed once** (from→to with fitted duration and ease), or **pinned**; split-text blocks. Virtual scrollers (transform-based) and non-scrolling layouts are handled.
+- **Motion vocabulary from the site's own JS:** GSAP eases, durations, staggers, ScrollTrigger `start`/`end`/`scrub` values and snippets, CSS cubic-beziers, smooth-scroll options.
+- **Stack:** GSAP, ScrollTrigger pins, Lenis, Locomotive, Barba, Swup, three.js version, Pixi, Spline, Lottie, Rive, Webflow, Framer, howler; canvases and their context type.
+- **three.js scene** (live, via three's devtools hook): renderer tone mapping and exposure, lights (type, colour, intensity, position), materials (PBR values, maps, transmission, custom-shader uniforms), meshes and vertex counts, fog, environment.
+- **Every GLSL program the page compiled:** `shaders/custom-*` are the site's own shaders. Port them; don't approximate the look.
+- **Hover diffs** per link/button/card, summarised (e.g. "7× child div y0 → y-31 = text roll"), plus custom-cursor detection.
+- **Menu/tab states and a page transition,** each as a frame sequence.
+- **Other routes** (screenshots per step) and the **real assets:** fonts, glb/gltf/ktx2/hdr, Lottie JSON, Rive, the largest images.
+
+A teardown turns "it has some animation" into "12 split-line reveals at 1100 ms expo.out, 1 pinned horizontal track, ScrollTrigger `start:'top top' end:'bottom-=500px bottom' scrub:true`". Specs and critiques must quote it.
 
 ## Protocol
 

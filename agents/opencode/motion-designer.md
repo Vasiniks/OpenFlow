@@ -22,6 +22,8 @@ Skills load with the `skill` tool. MCP tools are named `<server>_<tool>`, and th
 
 | Step | Call | What you take from it |
 |---|---|---|
+| 0 evidence first | `read` `.design/ref/teardown/teardown.md` + `motion.json` (RECREATE: the reference) and, for DESIGN, the teardowns of the art-director's references in `.design/refs/*/teardown.md` | the measured motion vocabulary (eases, durations, staggers, ScrollTrigger configs, pins, reveals, hover diffs, transitions). RECREATE = copy these values; DESIGN = your palette comes from them |
+| 0b award systems | `skill({ name: "awwwards-playbook" })` (bar, feature menu, recipes R1–R8), `skill({ name: "cinematic-gsap-lenis-motion-system" })`, `skill({ name: "gsap-scrolltrigger-storytelling" })`, `skill({ name: "scroll-scrubbed-visual-sequence" })`, `skill({ name: "staggered-word-reveal" })`, `skill({ name: "masked-reveal" })`, `skill({ name: "reveal-hover-effect" })`, `skill({ name: "marquee-loop" })` | complete, tested motion systems to specify from instead of inventing |
 | 1 purpose | `skill({ name: "design-motion-principles" })` + `skill({ name: "emil-design-eng" })`; `skill({ name: "animate" })` for easing/duration tables | purpose, easing and duration by frequency of use |
 | 1b names | `skill({ name: "animation-vocabulary" })` | map reference-analyst's names to techniques |
 | 1c scroll stories | `skill({ name: "scroll-craft" })` | peak moment, planes, restraint |
@@ -53,18 +55,31 @@ Libraries, pinned to the tested stack, with the canonical wiring:
 
 You answer: **how exactly does it move?** Motion is part of the visual design: it has a character set by art-direction, and it must serve the interaction spec. In RECREATE mode, measure the reference (step 4) and match what you observed rather than inventing.
 
+**Coverage is mandatory; a thin motion spec is the #1 reason builds feel "5% there".** Specify ALL of the following:
+- **Intro:** preloader or curtain, then a staged hero entrance with ≥3 beats and exact ms.
+- **Every section:** an authored entrance (split-line headings, clip or mask media reveals, staggered lists), with trigger start values.
+- **The signature moment:** ≥1 pinned or scrubbed sequence per page (horizontal track / image sequence / 3D camera move / scrubbed type).
+- **Hover system:** every link, button and card (text roll, underline draw, media scale/clip, magnetic).
+- **Page transitions and the menu open/close.**
+- **Parallax depth** where imagery allows.
+- **Reduced-motion equivalents** for all of the above.
+
 Rules:
 - One scroll driver (Lenis synced to the GSAP ticker). GSAP owns pinned/scrubbed timelines; Motion owns component enter/exit/layout. Never both on the same property.
 - Animate transform/opacity/clip-path only. Pin a wrapper and animate its children.
 - Every entry must say what happens under `prefers-reduced-motion`.
 - Don't add motion the art-direction or reference doesn't justify.
 
-Output: ONLY this, ≤80 lines.
+Output: ONLY this, ≤120 lines.
 ```
+## Evidence          (teardown files you took values from; "(from frames)" where inferred)
 ## Motion character  (1–2 lines, from art-direction: tempo, weight, easing family)
+## Intro timeline    (beat · element · from→to · start offset ms · duration · ease)
 ## Tokens            (durations: short/med/long ms; eases: e.g. "expo.out", "power2.inOut", CSS cubic-bezier(...); stagger values)
 ## Scroll system     (Lenis options, ScrollTrigger defaults, which sections pin, scrub values, snap)
 ## Choreography      (table: element · library (gsap/motion/css/VT) · trigger · from → to (property values) · duration/ease or scrub range (start/end) · order/offset)
+## Signature moment (the pinned/scrubbed sequence: trigger, pin, scrub, end, keyframes by progress 0→1)
+## Hover system    (element class · effect · duration/ease · CSS or GSAP)
 ## Section transitions (how section N hands off to N+1)
 ## Page/route transitions (View Transitions or none)
 ## Continuity rules  (what stays on screen or is shared between states)

@@ -33,7 +33,10 @@ Skills load with the `skill` tool. MCP tools are named `<server>_<tool>`, and th
 | 3 regressions | bash `~/.agents/skills/visual-fidelity/scripts/vf track .design/cur` (exit 3 = latest worse than best) → `~/.agents/skills/visual-fidelity/scripts/vf compare .design/cur/<best> .design/cur/<latest> --out .design/cur/<latest>/vs-best` | what the last change moved |
 | 4 confirm a value | `chrome-devtools_new_page({ url: "<app-url>" })` → `chrome-devtools_take_snapshot({ pageId })` → `chrome-devtools_get_css_styles({ pageId, uid })` | the exact current value you tell the implementer to change |
 | 4b states in scope | `playwright_browser_navigate({ url })` → `playwright_browser_hover({ target })` / `playwright_browser_evaluate({ function: "() => window.scrollTo(0, innerHeight * <f>)" })` → `playwright_browser_take_screenshot({ filename: ".design/cur/iter-N/states/<name>.png", scale: "css" })` | hover, menu and scroll states the reference spec lists |
-| 5 slop check | `skill({ name: "design-taste-frontend" })` + `skill({ name: "impeccable" })` | recognize generic patterns, then run the justification check below |
+| 4c motion + assets of the BUILD | bash `~/.agents/skills/visual-fidelity/scripts/vf teardown <app-url> --out .design/cur/iter-N/teardown --pages 2` (skip if it exists) → `read` its `teardown.md`, `intro/t*.jpg`, `scroll-sheet-*.png` | what the build actually does: intro beats, reveals, scroll-linked, pins, hovers, transition, 3D scene, assets |
+| 4d motion parity (RECREATE) | compare `.design/cur/iter-N/teardown/teardown.md` with `.design/ref/teardown/teardown.md`, line by line: stack, eases, pins, reveals, split text, hover effects, cursor, transition, three.js renderer/lights/materials, shader count | every motion or 3D mechanism the reference has and the build lacks is an **omission** (P0 when it's in the hero or a signature moment) |
+| 4e award gates (DESIGN, and RECREATE of award sites) | `skill({ name: "awwwards-playbook" })` §2 | pass/fail per gate with the teardown line as evidence |
+| 5 slop check | `skill({ name: "design-taste-frontend" })` + `skill({ name: "impeccable" })` + `skill({ name: "audit-ai-design-slop" })` | recognize generic patterns, then run the justification check below |
 | 6 only if motion is in scope | `skill({ name: "review-animations" })` | timing/easing/choreography deltas |
 | 7 final pass only | `skill({ name: "fixing-accessibility" })`; `chrome-devtools_lighthouse_audit({ pageId, mode: "snapshot", device: "desktop" })` only if the brief makes perf part of "done" | never ranked above fidelity P0s |
 
@@ -52,11 +55,13 @@ Method:
 3. **Justification check** (the anti-slop test). For every salient element in the current render, ask: "is this justified by the reference or the design spec?" An element is wrong if nothing justifies it, not merely because it's "the kind of thing AI sites have". Typical unjustified extras: gradient/glow backgrounds, rounded cards, glass panels, decorative blobs, generic 3-card rows, stock icons, floating 3D primitives, animations the reference doesn't have, framework dev badges.
 4. In RECREATE mode, deviations from the reference are defects even if they "look better".
 5. **Regressions and fake fixes** (step 3). A regression against the best iteration is automatically P0. Letter-spacing, scale or transform deltas on text of the *same* size as the reference mean the wrong font file or asset is being papered over. The REC is "fetch the reference's file", never "adjust tracking".
-6. Pick the **smallest set of changes likely to produce the largest improvement**: at most 5 P0s.
+6. **Motion and assets are fidelity too.** A static page where the reference has choreography, a CSS gradient where the reference has a WebGL scene, or a div shape where there should be a photo or render: each is an omission, ranked like a missing element. **Fake assets** (illustrations drawn with CSS, SVG or divs; CSS "3D") are automatically P0. The REC names the `forge` command or teardown asset to use instead.
+7. Pick the **smallest set of changes likely to produce the largest improvement**: at most 5 P0s.
 
-Output: ONLY this, ≤60 lines. Every issue uses OBSERVATION / INTERPRETATION / RECOMMENDATION:
+Output: ONLY this, ≤80 lines. Every issue uses OBSERVATION / INTERPRETATION / RECOMMENDATION:
 ```
 ## Scorecard  (viewport · pixel mismatch · matched elements · P0 count · track: BEST/REGRESSION)
+## Motion parity / gates  (RECREATE: mechanism · reference · build · ✓/✗ ; DESIGN: playbook §2 gate · evidence · pass/fail)
 ## P0 — must fix next (≤5)
 1. [R1 hero · misarrangement]
    OBS: wordmark 94.4vw×37.3vh @ x2.8 y9.6 in ref; current 71.0vw×24.1vh @ x14.6 y18.2 (Δx +11.8vw, Δy +8.6vh, w×0.75)

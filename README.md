@@ -37,11 +37,11 @@ Passing flags through the one-liner: `… | bash -s -- --only opencode` (macOS/L
 
 | Layer | What |
 |---|---|
-| **Skills** | ~95 skills from their authors' repos via the [`skills`](https://github.com/vercel-labs/skills) CLI. Frontend: design taste, GSAP (official), Motion, Emil Kowalski's animation skills, Vercel React/Next, shadcn, Tailwind, three.js, shaders, Blender, web-perf, accessibility. Engineering: spec/TDD/debugging/review workflows. OpenFlow's own: `visual-fidelity` and `asset-library` |
+| **Skills** | ~125 skills from their authors' repos via the [`skills`](https://github.com/vercel-labs/skills) CLI. Frontend: design taste, GSAP (official), Motion, Emil Kowalski's animation skills, Vercel React/Next, shadcn, Tailwind, three.js, shaders, Blender, web-perf, accessibility. Engineering: spec/TDD/debugging/review workflows. Award-level web design: 26 of Meng To's skills. OpenFlow's own: `visual-fidelity` (incl. `vf teardown`), `asset-forge`, `awwwards-playbook`, `asset-library` |
 | **MCP servers** | `playwright`, `chrome-devtools`, `context7` (live docs), `github` (read-only; token read from `gh` at launch, never stored), `blender` (Poly Haven / Sketchfab / Poly Pizza assets), `headroom` (context compression), `serena` (code intelligence), `motion` (official Motion docs), `shadcn` (component registries), `gsap` (official GreenSock skills + a GSAP code validator) |
 | **Plugins** | Claude Code: superpowers, frontend-design, impeccable, ui-ux-pro-max, typescript-lsp, claude-md-management, claude-hud, plus the Motion `motion-reviewer` agent. OpenCode: superpowers (+ rtk if Homebrew is available). Muse: superpowers |
 | **Tools** | serena, headroom, spec-kit (`specify`), codeburn, typescript-language-server, gltf-transform, Playwright Chromium, GitHub MCP binary (checksum-verified), Blender MCP add-on (if Blender is installed) |
-| **Agent fleet** | 9 OpenCode agents + `/recreate` and `/critique` commands (below) |
+| **Agent fleet** | 10 OpenCode agents + `/awwwards`, `/recreate` and `/critique` commands (below) |
 
 ### Harness support
 
@@ -59,16 +59,41 @@ Passing flags through the one-liner: `… | bash -s -- --only opencode` (macOS/L
 Open a project in OpenCode, press **Tab** until the agent is `frontend`, then:
 
 ```
-/recreate https://example.com            # measured recreation: desktop, then mobile
-/critique /                              # measured critique of a route, no code changes
-make the sections pin and scrub on scroll # or just describe what you want
+/awwwards "Launch site for <product>. Audience … Tone … Needs …"   # one-shot an original award-level site
+/recreate https://example.com                                      # recreate a site: every section, motion, 3D, pages
+/critique /                                                        # measured critique + award gates, no code changes
+make the sections pin and scrub on scroll                          # or just describe what you want
 ```
 
-`frontend` is the orchestrator and the only agent that writes code. It calls read-only specialists as the task needs them, and some specialists consult each other:
+### What makes it award-level
+- **`vf teardown <url>`** reverse-engineers any reference with Playwright. It captures:
+  - the intro frames and a video;
+  - contact sheets of a full scroll;
+  - a motion map (scroll-linked, reveals with fitted duration and ease, pins, split text);
+  - hover diffs, the custom cursor, menu states and page transitions;
+  - the library stack, and the site's own GSAP eases, durations and ScrollTrigger configs pulled from its JS;
+  - the **live three.js scene** (tone mapping, lights, PBR materials, meshes) and **every GLSL shader it compiles**;
+  - the real font, model, HDRI, Lottie and image files.
+- **`forge`** makes real assets instead of CSS art:
+  - CC0 photography and Poly Haven HDRIs and models;
+  - headless-Blender studio renders on a seamless cove with real HDRI light;
+  - Apple-style scroll-scrub image sequences;
+  - procedural glass, chrome, liquid-metal, crystal and silk hero objects exported as optimised glTF;
+  - AI images when you have a key.
+- **`awwwards-playbook`**:
+  - the jury rubric (Design 40 / Usability 30 / Creativity 20 / Content 10);
+  - a measurable definition of done that the critic checks against a teardown of the build;
+  - a signature-feature menu;
+  - tested Next.js recipes (Lenis + GSAP, preloader, split-line reveals, clip reveals, pinned tracks, image sequences, R3F hero, hover systems);
+  - superprompt templates.
+- **26 skills from [Meng To's collection](https://github.com/MengTo/Skills)** (cinematic motion systems, video → superprompt, anti-slop audits, honest asset rules) plus the official GSAP skills and MCP.
+
+`frontend` is the orchestrator and writes the code. `asset-producer` writes asset files only. Everyone else is a read-only specialist, and some specialists consult each other:
 
 | Agent | Answers | Consults |
 |---|---|---|
-| reference-analyst | What exactly is the reference doing? (measured: layout in vw/vh, real font files, assets, motion) | — |
+| reference-analyst | What exactly does the reference do, and how is it built? Teardown plus hands-on Playwright exploration of every page and state, written up as a superprompt spec | — |
+| asset-producer | Produces every asset: photos, HDRIs, models, Blender renders and sequences, procedural glTF, AI images. Writes only `public/**` | — |
 | art-director | What should it look and feel like? | threejs-art-director, motion-designer, reference-analyst |
 | interaction-designer | What happens when the user does something? | motion-designer, reference-analyst |
 | motion-designer | How exactly does it move? (GSAP / Lenis / Motion values) | reference-analyst |
@@ -77,7 +102,13 @@ make the sections pin and scrub on scroll # or just describe what you want
 | responsive-specialist | What each region becomes at each size | visual-critic, reference-analyst |
 | visual-critic | What's wrong, ranked, with evidence | reference-analyst |
 
-Every change goes through a measured loop. `vf capture` renders fixed viewports; `vf compare` produces pixel hotspots, element deltas, omissions and extras; the critic returns at most 5 must-fix issues; the orchestrator fixes only those; `vf track` guards against regressions. It stops on the best iteration, and only after a fresh critic verdict. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), per-agent tools: [docs/AGENTS.md](docs/AGENTS.md).
+Every change goes through a measured loop:
+1. `vf capture` and `vf compare` measure pixels and layout.
+2. `vf teardown` of the build measures its motion, assets and 3D. Against the reference that gives **motion parity**; for original work, the **award gates**.
+3. The critic returns at most 5 must-fix issues. Fake assets and missing choreography are automatically P0.
+4. The orchestrator fixes only those, and `vf track` guards against regressions.
+
+It stops on the best iteration, and only after a fresh critic verdict. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), per-agent tools: [docs/AGENTS.md](docs/AGENTS.md).
 
 ## Safety
 

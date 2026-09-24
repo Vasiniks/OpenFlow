@@ -5,6 +5,6 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 [ -d "$DIR/node_modules/playwright-core" ] || npm install --prefix "$DIR" --no-audit --no-fund --silent >/dev/null 2>&1 || { echo "vf: npm install failed" >&2; exit 1; }
 cmd="$1"; shift
 case "$cmd" in
-  capture|compare|track) exec node "$DIR/$cmd.mjs" "$@" ;;
-  *) echo "usage: vf capture <url> --out DIR [--viewports 1440x900,390x844] [--scroll 0,0.5] [--wait ms] [--reduced-motion] [--full]"; echo "       vf compare <refDir> <curDir> --out DIR"; echo "       vf track <curRoot>   (trend + regression guard)"; exit 2 ;;
+  capture|compare|track|teardown) exec node "$DIR/$cmd.mjs" "$@" ;;
+  *) echo "usage: vf capture <url> --out DIR [--viewports 1440x900,390x844] [--scroll 0,0.5] [--wait ms] [--reduced-motion] [--full]"; echo "       vf compare <refDir> <curDir> --out DIR"; echo "       vf track <curRoot>   (trend + regression guard)"; echo "       vf teardown <url> --out DIR [--pages 6] [--no-video] [--no-assets]   (reverse-engineer a reference)"; exit 2 ;;
 esac

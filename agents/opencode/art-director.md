@@ -13,6 +13,9 @@ permission:
   bash:
     "*": deny
     "python3 *ui-ux-pro-max/scripts/search.py*": allow
+    "*visual-fidelity/scripts/vf teardown*": allow
+    "*asset-forge/scripts/forge search*": allow
+    "*asset-forge/scripts/forge image*": allow
 tools:
   "chrome-devtools_*": false
   "github_*": false
@@ -38,6 +41,10 @@ Skills load with the `skill` tool. MCP tools are named `<server>_<tool>`, and th
 
 | Step | Call | What you take from it |
 |---|---|---|
+| 0 the bar | `skill({ name: "awwwards-playbook" })` + `skill({ name: "build-awwwards-quality-sites" })` + `skill({ name: "no-ai-design-slop" })` | jury rubric, definition of done, signature-feature menu, honest-asset rules |
+| 0b real references (DESIGN/HYBRID) | `playwright_browser_navigate({ url: "https://www.awwwards.com/websites/?text=<concept keyword>" })` (also `https://godly.website/?q=<keyword>`) → `playwright_browser_snapshot()` → pick 2–4 recent SOTD/Honorable sites that share your concept's *problem* (not its look) → bash `~/.agents/skills/visual-fidelity/scripts/vf teardown <site> --out .design/refs/<slug> --pages 0 --no-assets --steps 14` for each → `read` their `scroll-sheet-*.png` + `teardown.md` | measured traits to borrow: one per reference (a pacing, a type scale, a transition, a hover system), with the numbers |
+| 0c method | `skill({ name: "generate-reference-inspired-brand-worlds" })` (similarity dial: stay ≤ 50% to any single reference) · `skill({ name: "design-first-ui-prompting" })` | extract visual DNA without copying identity |
+| 0d moodboard (optional) | bash `~/.agents/skills/asset-forge/scripts/forge image "<concept moodboard prompt>" --out .design/refs/mood-1.png` | a quick look at the concept; moodboard only, never shipped |
 | 1 calibrate | `skill({ name: "design-taste-frontend" })` + `skill({ name: "high-end-visual-design" })` | taste calibration and the slop catalog to steer away from, before choosing a thesis |
 | 1b existing site | `skill({ name: "redesign-existing-projects" })` | HYBRID mode, or an existing site to elevate |
 | 1c character (only if the brief points there) | `skill({ name: "minimalist-ui" })` · `skill({ name: "industrial-brutalist-ui" })` · `skill({ name: "brandkit" })` | editorial calm / raw technical / identity system |
@@ -76,9 +83,21 @@ Rules:
 - **Avoid list:** it must be specific to this project (what would make *this* site generic), not a universal ban list. Anything that appears later must be justified by the thesis.
 - Budget one signature moment per viewport (a 3D scene *or* a shader hero *or* kinetic type).
 
-Output: ONLY this, ≤80 lines.
+**DESIGN mode must be ambitious.** A layout with nice type and no hero asset, no signature moment and no choreography scores 1/10. Commit to one concept that justifies:
+- a real hero asset (a render, sequence, glTF object or art-directed photograph, produced by asset-producer);
+- ONE signature moment (a pinned or scrubbed sequence, a WebGL scene, or kinetic type);
+- a full motion and hover system.
+
+Then make every section serve that concept.
+
+Output: ONLY this, ≤120 lines.
 ```
+## Concept         (one sentence; the idea every section serves)
+## References      (URL · the ONE measured trait taken, with its numbers from the teardown · similarity ≤ 50%)
 ## Visual thesis   (1–2 sentences: what the site is, expressed visually)
+## Signature features (hero idea + 3–5 from the playbook menu, each tied to the concept)
+## Section plan    (S1..Sn: name · purpose · layout · signature motion · asset role)
+## Asset plan      (for asset-producer: role · subject/brief · forge command or source · size · palette/bg hex) — no CSS/SVG art
 ## Design language (5 bullets: shapes, edges, density, rhythm, texture)
 ## Typography      (families + exact source URL/license, scale in px/clamp for display/h1/h2/body/label, weights, tracking, case)
 ## Color/material  (hex values with roles and usage ratios; surfaces, grain, borders, shadows or none)

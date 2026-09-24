@@ -32,6 +32,8 @@ Skills load with the `skill` tool. MCP tools are named `<server>_<tool>`, and th
 
 | Step | Call | What you take from it |
 |---|---|---|
+| 0 evidence (RECREATE) | `read` `.design/ref/teardown/three.json`, every `.design/ref/teardown/shaders/custom-*.{vert,frag}`, and the `model`/`hdri` files in `.design/ref/teardown/assets/` | the reference's exact renderer (tone mapping, exposure), lights, PBR values, meshes, and its own GLSL. **Specify porting those shaders and values**; do not approximate them |
+| 0b hero assets (DESIGN) | `skill({ name: "asset-forge" })`, `skill({ name: "webgl-3d-object" })`, `skill({ name: "build-threejs-scroll-worlds" })`, `skill({ name: "awwwards-playbook" })` (recipe R7) | the object comes from `forge procedural|model|render` via asset-producer (name the exact command); scroll-world structure |
 | 1 rules | `skill({ name: "threejs-scenes" })` | camera/light/material/post decisions that stay implementable: instancing, post-chain order, quality tiers, disposal |
 | 1b custom looks | `skill({ name: "shader-dev" })` | name techniques (dissolve, domain-warped noise, SDF glass, fresnel rim) with their parameters |
 | 1c modeled hero | `skill({ name: "blender-hard-surface-modeling" })` | only when the hero object must be modeled rather than sourced |
@@ -71,7 +73,8 @@ Output: ONLY this, ≤70 lines.
 ## Scale & layout    (object size relative to type, z-order vs DOM, what overlaps what)
 ## Lighting          (key/fill/rim or HDRI (Poly Haven asset id), intensity ratios, direction relative to UI, tone mapping/exposure)
 ## Materials         (per surface: PBR values (base color, roughness, metalness, transmission/clearcoat), textures + asset id/license)
-## Assets            (each: source · id/uid · license · target size · download call for the implementer)
+## Assets            (each: source · id/uid · license · target size · the exact `forge` command for asset-producer)
+## Shaders           (RECREATE: teardown shader files to port + uniforms and how scroll/pointer drive them; DESIGN: technique + parameters)
 ## Environment/depth (background, fog, DOF, contact shadows, grain; none is a valid answer)
 ## Choreography      (scroll/interaction → camera or object moves: keyframes as progress 0→1 with positions/angles; idle motion or none)
 ## 3D↔DOM composition (how headline/UI and scene interlock, per viewport)

@@ -7,10 +7,11 @@ import { fileURLToPath } from "node:url";
 
 const dir = dirname(fileURLToPath(import.meta.url));
 const [cmd, ...rest] = process.argv.slice(2);
-if (!["capture", "compare", "track"].includes(cmd)) {
+if (!["capture", "compare", "track", "teardown"].includes(cmd)) {
   console.log("usage: vf capture <url> --out DIR [--viewports 1440x900,390x844] [--scroll 0,0.5] [--wait ms] [--reduced-motion] [--full]");
   console.log("       vf compare <refDir> <curDir> --out DIR");
   console.log("       vf track <curRoot>   (trend + regression guard)");
+  console.log("       vf teardown <url> --out DIR [--pages 6] [--no-video] [--no-assets]   (reverse-engineer a reference)");
   process.exit(2);
 }
 if (!existsSync(join(dir, "node_modules", "playwright-core"))) {

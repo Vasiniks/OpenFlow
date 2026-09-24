@@ -1,0 +1,3 @@
+#!/bin/sh
+# forge: real assets (sourced / Blender-rendered / generated). See forge.mjs for commands.
+exec node "$(cd "$(dirname "$0")" && pwd)/forge.mjs" "$@"
