@@ -27,7 +27,14 @@ if (-not (Have uv)) {
   $env:Path = (Join-Path $HOME '.local\bin') + ';' + $env:Path
 }
 
-if (Test-Path (Join-Path $Dir '.git')) { git -C $Dir pull --ff-only -q } else { git clone -q --depth 1 $Repo $Dir }
+if (Test-Path (Join-Path $Dir '.git')) {
+  git -C $Dir pull --ff-only -q
+} elseif (Test-Path $Dir) {   # an earlier install left caches/backups here: adopt the folder instead of cloning into it
+  git -C $Dir init -q; git -C $Dir remote add origin $Repo; git -C $Dir fetch -q --depth 1 origin main
+  git -C $Dir checkout -q -f -B main FETCH_HEAD; git -C $Dir branch -q -u origin/main
+} else {
+  git clone -q --depth 1 $Repo $Dir
+}
 
 $bin = Join-Path $HOME '.local\bin'
 New-Item -ItemType Directory -Force -Path $bin | Out-Null

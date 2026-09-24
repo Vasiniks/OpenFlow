@@ -23,7 +23,14 @@ if ! have uv; then
   export PATH="$HOME/.local/bin:$PATH"
 fi
 
-if [ -d "$DIR/.git" ]; then git -C "$DIR" pull --ff-only -q; else git clone -q --depth 1 "$REPO" "$DIR"; fi
+if [ -d "$DIR/.git" ]; then
+  git -C "$DIR" pull --ff-only -q
+elif [ -d "$DIR" ]; then   # an earlier install left caches/backups here: adopt the folder instead of cloning into it
+  git -C "$DIR" init -q && git -C "$DIR" remote add origin "$REPO" && git -C "$DIR" fetch -q --depth 1 origin main \
+    && git -C "$DIR" checkout -q -f -B main FETCH_HEAD && git -C "$DIR" branch -q -u origin/main
+else
+  git clone -q --depth 1 "$REPO" "$DIR"
+fi
 
 mkdir -p "$HOME/.local/bin"
 printf '#!/bin/sh\nexec node "%s/openflow.mjs" "$@"\n' "$DIR" > "$HOME/.local/bin/openflow"
