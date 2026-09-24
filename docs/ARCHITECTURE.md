@@ -163,3 +163,30 @@ Grounding for the design:
 - **Perceptual AI scores (CLIP/SSIM dashboards)** as the stop criterion. Pixel + element deltas plus a critic reading the images was enough, and every extra metric is another thing to game.
 - **Always-on specialists.** The orchestrator's task-dependent teams were right: the recreate test never needed the interaction, motion or 3D designers.
 - **ECC-style bulk skill packs.** Each agent gets a named toolbox of what it actually uses.
+
+## Live test: one-shot `/awwwards` (Halo headphones brief), 2026-09-24
+
+Same brief, fresh Next.js project each time, OpenCode + Muse Spark, no human input.
+
+| | Run 1 (overhaul v1) | Run 2 (after run-1 fixes) |
+|---|---|---|
+| Result | first pass only: the run died before its critique loop (temp-dir permission) | full pipeline, 10 iterations, 2 critic verdicts, gate table |
+| Art direction | concept + 3 measured references (teardowns) + section/asset plan | same, plus a WebGL hero decision |
+| Hero asset | Blender-rendered **chrome knot** (stand-in: there was no way to model the product) | the **product itself**, modelled in headless Blender (titanium band, ceramic pods, fabric grilles), shown in real-time WebGL |
+| Other assets | some **code-painted** images (PIL "brushed metal", a grey "pebble" case) | Cycles renders of the model, 60-frame turntable, CC0 photos graded in Blender; 0 CSS/code-painted art |
+| Motion | Lenis + GSAP (78 animated elements), SplitText, pinned 48-frame sequence hero, pinned horizontal track, text-roll nav | intro counter → curtain → staged hero, pinned material track, pinned 250vh scrub with sequence + exploded view, SplitLines everywhere, magnetic CTA |
+| Gates | not evaluated (no loop) | 8 pass · 3 conditional (3D, perf, a11y) · 1 fail (cross-route transition) |
+
+Failures each run exposed, all now fixed:
+- **`/dev` redirect auto-rejected.** Asset-producer died on its first `2>/dev/null` because non-interactive runs auto-reject any "ask" permission. Every agent now allows `/dev`, the system temp dirs, and the tool/cache dirs.
+- **Orchestrator making assets itself.** It filled in with curl'd stock and PIL image-painting after the asset-producer failed. It's now forbidden; the orchestrator retries asset-producer instead.
+- **No way to model a bespoke product.** Added `forge blender` plus a product modelling template.
+- **Meshopt `.glb` unreadable by Blender.** Switched to Draco.
+- **The built-in `general` implementer couldn't be given directory permissions.** It's replaced by the `builder` agent.
+- **"Macro" shots were full-product shots.** Added `--shot macro` with `--focus`, surface-focused DOF, and scale-normalised renders.
+- **The critic was lenient** on a titanium band rendering flat white and on a two-word-wide text column over the product. Broken materials and illegible overlays are now P0.
+
+Still open:
+- Teardown's hover probe misses some child-span CSS transitions (the critic flagged working hovers).
+- WebGL material setup still needs the critic's eye.
+- Runs take about 2 hours on Muse Spark.

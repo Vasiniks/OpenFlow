@@ -1,21 +1,22 @@
 # OpenCode frontend fleet: agents report
 
-Generated from `agents/opencode/` (10 agents).
+Generated from `agents/opencode/` (11 agents).
 
 ## Overview
 
 | Agent | Mode | Edits code | Can consult | Shell | MCPs enabled | Prompt size |
 |---|---|---|---|---|---|---|
-| **frontend** | primary | yes (orchestrator / single writer) | reference-analyst, art-director, frontend-architect, interaction-designer, motion-designer, threejs-art-director, responsive-specialist, visual-critic, asset-producer, general, explore | full | chrome-devtools, context7, serena, motion, shadcn, gsap | 13,521 chars |
+| **frontend** | primary | yes (orchestrator / single writer) | reference-analyst, art-director, frontend-architect, interaction-designer, motion-designer, threejs-art-director, responsive-specialist, visual-critic, asset-producer, builder, explore | full | chrome-devtools, context7, serena, motion, shadcn, gsap | 13,968 chars |
 | **reference-analyst** | subagent | no | — (leaf) | *visual-fidelity/scripts/vf capture*, *visual-fidelity/scripts/vf teardown*, ls * | playwright, chrome-devtools, headroom | 5,687 chars |
-| **art-director** | subagent | no | threejs-art-director, motion-designer, reference-analyst | python3 *ui-ux-pro-max/scripts/search.py*, *visual-fidelity/scripts/vf teardown*, *asset-forge/scripts/forge search*, *asset-forge/scripts/forge image* | playwright, blender | 8,872 chars |
+| **art-director** | subagent | no | threejs-art-director, motion-designer, reference-analyst | python3 *ui-ux-pro-max/scripts/search.py*, *visual-fidelity/scripts/vf teardown*, *asset-forge/scripts/forge search*, *asset-forge/scripts/forge image* | playwright, blender | 9,206 chars |
 | **frontend-architect** | subagent | no | explore | ls *, cat package.json, cat components.json | chrome-devtools, context7, github, serena, shadcn, gsap | 6,046 chars |
 | **interaction-designer** | subagent | no | motion-designer, reference-analyst | none | playwright | 4,635 chars |
 | **motion-designer** | subagent | no | reference-analyst | none | playwright, chrome-devtools, context7, motion, gsap | 9,221 chars |
 | **threejs-art-director** | subagent | no | reference-analyst | none | context7, github, blender | 6,794 chars |
 | **responsive-specialist** | subagent | no | visual-critic, reference-analyst | *visual-fidelity/scripts/vf *, ls * | playwright, chrome-devtools | 5,033 chars |
-| **visual-critic** | subagent | no | reference-analyst | *visual-fidelity/scripts/vf *, ls * | playwright, chrome-devtools | 6,980 chars |
-| **asset-producer** | subagent | yes | — (leaf) | *asset-forge/scripts/forge *, *visual-fidelity/scripts/vf capture*, ls *, mkdir -p *, cp * | blender | 3,812 chars |
+| **visual-critic** | subagent | no | reference-analyst | *visual-fidelity/scripts/vf *, ls * | playwright, chrome-devtools | 7,393 chars |
+| **asset-producer** | subagent | yes | — (leaf) | *asset-forge/scripts/forge *, *visual-fidelity/scripts/vf capture*, ls *, mkdir -p *, cp *, cp ~/.agents/skills/asset-forge/scripts/templates/* | blender | 4,725 chars |
+| **builder** | subagent | yes | — (leaf) |  | chrome-devtools, context7, serena, motion, shadcn, gsap | 5,281 chars |
 
 ## Per agent
 
@@ -28,7 +29,7 @@ Frontend design & recreation orchestrator. Runs specialist analysis → implemen
 - **MCPs:** on: chrome-devtools, context7, serena, motion, shadcn, gsap; off: —
 - **Skills loaded via `skill({ name })` (22):** asset-library, awwwards-playbook, baseline-ui, cinematic-gsap-lenis-motion-system, fixing-accessibility, fixing-metadata, fixing-motion-performance, frontend-ui-engineering, gsap-plugins, gsap-react, gsap-scrolltrigger, gsap-timeline, motion, shadcn, shader-dev, tailwind-design-system, threejs-scenes, vercel-composition-patterns, vercel-react-best-practices, web-perf, webapp-testing, webgl-3d-object
 - **MCP tools called by exact name (12):** `chrome-devtools_list_console_messages`, `chrome-devtools_list_network_requests`, `chrome-devtools_new_page`, `context7_query-docs`, `context7_resolve-library-id`, `gsap_create_production_pattern`, `gsap_generate_complete_setup`, `gsap_validate_gsap_code`, `motion_search-motion-docs`, `serena_find_symbol`, `shadcn_get_add_command_for_items`, `shadcn_search_items_in_registries`
-- **Asset libraries / effect libs (10):** GSAP, Motion, View Transitions, React Bits, Magic UI, cobe, R3F, drei, postprocessing, shadcn
+- **Asset libraries / effect libs (11):** Poly Haven, GSAP, Motion, View Transitions, React Bits, Magic UI, cobe, R3F, drei, postprocessing, shadcn
 
 ### reference-analyst
 
@@ -49,9 +50,9 @@ Sets concrete visual direction — thesis, typography, color/material, compositi
 - **Mode / temperature:** subagent / 0.5
 - **Edits code:** no · **Shell:** python3 *ui-ux-pro-max/scripts/search.py*, *visual-fidelity/scripts/vf teardown*, *asset-forge/scripts/forge search*, *asset-forge/scripts/forge image*
 - **MCPs:** on: playwright, blender; off: chrome-devtools, github, serena, headroom, context7, shadcn, motion, gsap
-- **Skills loaded via `skill({ name })` (14):** asset-library, awwwards-playbook, brandkit, build-awwwards-quality-sites, design-first-ui-prompting, design-taste-frontend, frontend-design, generate-reference-inspired-brand-worlds, high-end-visual-design, impeccable, industrial-brutalist-ui, minimalist-ui, no-ai-design-slop, redesign-existing-projects
+- **Skills loaded via `skill({ name })` (15):** asset-forge, asset-library, awwwards-playbook, brandkit, build-awwwards-quality-sites, design-first-ui-prompting, design-taste-frontend, frontend-design, generate-reference-inspired-brand-worlds, high-end-visual-design, impeccable, industrial-brutalist-ui, minimalist-ui, no-ai-design-slop, redesign-existing-projects
 - **MCP tools called by exact name (7):** `blender_get_polyhaven_asset_preview`, `blender_get_sketchfab_model_preview`, `blender_search_polyhaven_assets`, `blender_search_sketchfab_models`, `playwright_browser_navigate`, `playwright_browser_snapshot`, `playwright_browser_take_screenshot`
-- **Asset libraries / effect libs (5):** Motion, Unicorn Studio, React Bits, cobe, shadcn
+- **Asset libraries / effect libs (6):** Poly Haven, Motion, Unicorn Studio, React Bits, cobe, shadcn
 - **Output contract:** Concept · References · Visual thesis · Signature features · Section plan · Asset plan · Design language · Typography · Color/material · Composition · Imagery/assets · Signature effect · Motion principles · 3D principles · Avoid · Implementation priorities
 
 ### frontend-architect
@@ -131,8 +132,19 @@ Compares the current render against the reference (or the art-direction spec) us
 Produces the real visual assets a page needs — CC0 photography, Poly Haven HDRIs/models, headless-Blender studio renders, scroll-scrub image sequences, procedural glass/chrome/liquid-metal hero objects (optimised glTF), Blender-MCP modelling, AI images when a key exists — into public/. Never draws assets with CSS/SVG. Writes only public/**, .design/** and ATTRIBUTION.md.
 
 - **Mode / temperature:** subagent / 0.3
-- **Edits code:** yes · **Shell:** *asset-forge/scripts/forge *, *visual-fidelity/scripts/vf capture*, ls *, mkdir -p *, cp *
+- **Edits code:** yes · **Shell:** *asset-forge/scripts/forge *, *visual-fidelity/scripts/vf capture*, ls *, mkdir -p *, cp *, cp ~/.agents/skills/asset-forge/scripts/templates/*
 - **MCPs:** on: blender; off: chrome-devtools, github, serena, shadcn, gsap, motion, headroom
 - **Skills loaded via `skill({ name })` (2):** asset-forge, asset-library
 - **MCP tools called by exact name (5):** `blender_execute_blender_code`, `blender_export_scene`, `blender_generate_hyper3d_model_via_text`, `blender_get_scene_info`, `blender_get_viewport_screenshot`
 - **Asset libraries / effect libs (0):** —
+
+### builder
+
+The single code implementer the frontend orchestrator hands bounded build tasks to — sections, components, motion, WebGL, fixes from the critique. Writes code only in the files the task names; uses the playbook recipes and the real assets in public/. Never produces assets and never delegates.
+
+- **Mode / temperature:** subagent / 0.2
+- **Edits code:** yes · **Shell:** 
+- **MCPs:** on: chrome-devtools, context7, serena, motion, shadcn, gsap; off: blender, github, headroom
+- **Skills loaded via `skill({ name })` (22):** asset-library, awwwards-playbook, baseline-ui, cinematic-gsap-lenis-motion-system, fixing-accessibility, fixing-metadata, fixing-motion-performance, frontend-ui-engineering, gsap-plugins, gsap-react, gsap-scrolltrigger, gsap-timeline, motion, shadcn, shader-dev, tailwind-design-system, threejs-scenes, vercel-composition-patterns, vercel-react-best-practices, web-perf, webapp-testing, webgl-3d-object
+- **MCP tools called by exact name (12):** `chrome-devtools_list_console_messages`, `chrome-devtools_list_network_requests`, `chrome-devtools_new_page`, `context7_query-docs`, `context7_resolve-library-id`, `gsap_create_production_pattern`, `gsap_generate_complete_setup`, `gsap_validate_gsap_code`, `motion_search-motion-docs`, `serena_find_symbol`, `shadcn_get_add_command_for_items`, `shadcn_search_items_in_registries`
+- **Asset libraries / effect libs (9):** GSAP, View Transitions, React Bits, Magic UI, cobe, R3F, drei, postprocessing, shadcn

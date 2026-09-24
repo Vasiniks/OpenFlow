@@ -28,7 +28,8 @@ SOTD ≈ 8.0+/10 from ~18 jurors (outliers dropped). Design + Usability = 70%.
 | Hover system | teardown `hover.json` | every link/button/card has a designed hover (text roll, underline draw, image scale/clip, magnetic) |
 | No empty viewports | contact sheet (`scroll-sheet-*.png`) | every screen carries content + a real asset; no dark/blank panels waiting for imagery |
 | Real assets | teardown `assets.json` + source grep | hero uses a real photo/render/video/glTF; **0 illustrations drawn with CSS/SVG/divs**; every asset credited |
-| 3D/shader (if used) | teardown `three.json` | tone mapping ACES/AgX, HDRI environment, PBR materials with real values; DPR ≤ 2; paused off-screen |
+| 3D/shader (if used) | teardown `three.json` + a crop of the render | tone mapping ACES/AgX, HDRI environment applied to every material (metals show reflections, never flat white/black), PBR values; DPR ≤ 2; paused off-screen |
+| Legibility | captures at 1440 + 390 | text over imagery/3D ≥ 4.5:1 contrast; no display text column narrower than ~18 characters |
 | Transitions | teardown `transition` | route changes animate (View Transitions or GSAP overlay), not a hard cut |
 | Performance | Chrome trace / Lighthouse mobile | 60 fps while scrolling, LCP < 2.5 s, CLS < 0.05, JS < ~350 KB gz per route |
 | Access | keyboard + `prefers-reduced-motion` | focus visible; reduced motion = final states, no scrub/pin/smooth scroll |
