@@ -1,0 +1,8 @@
+# created at runtime inside ~/.openflow (the install clone)
+/bin/
+/cache/
+/backups/
+/live-check/
+node_modules/
+.DS_Store
+.serena/
