@@ -19,7 +19,8 @@ description: Produce REAL visual assets for a website instead of drawing them wi
 | Real-world object | Poly Haven model (CC0) → optimised glb | `$F search models chair` → `$F model ArmChair_01 --out public/models` |
 | **The product itself** (headphones, bottle, device, chair…) — no model exists | model it in headless Blender from the template | copy `scripts/templates/product_open_ear.py` → edit the curves/primitives/materials → `$F blender my_product.py -- --out public/models` → `$F optimize public/models/product.raw.glb public/models/product.glb` → render / sequence it |
 | Hero object with a material story | procedural Blender object | `$F procedural glass-blob --out public/models --light hero --color "#dfe8ff"` (also `chrome-knot`, `liquid-metal`, `crystal-cluster`, `silk-ribbon`) |
-| Product shot / plate from a model | headless Blender studio render | `$F render public/models/x.glb --out public/img --light dark --size 2400x1350 --dof` |
+| Product shot / plate from a model | headless Blender studio render | `$F render public/models/x.glb --out public/img --light dark --size 2400x1350 --shot hero` |
+| Material / detail macro (a seam, the finish, a pod) | macro shot aimed at the part | `$F render public/models/x.glb --shot macro --focus 0.9,0,-0.1 --angle 10 --light dark --name macro-ceramic` (`--focus` is in object-radius units from the centre; `macro` = 135 mm, f/4, surface-focused) |
 | Apple-style scroll-scrubbed object | turntable / dolly / crane frames | `$F sequence public/models/x.glb --out public/seq --frames 120 --path orbit --size 1600x1000` |
 | Transparent cut-out of an object | render with alpha | add `--transparent` |
 | Illustration / painterly plate / texture | AI image (needs `OPENAI_API_KEY` or `FAL_KEY`) | `$F image "<prompt>" --out public/img/plate.png --size 1536x1024` |

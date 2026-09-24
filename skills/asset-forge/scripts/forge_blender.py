@@ -96,6 +96,9 @@ def frame_objects(sc, objs, angle=30, fov_mm=85, margin=1.35):
     lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
     hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
     center, radius = (lo + hi) / 2, max((hi - lo).length / 2, 0.01)
+    # --focus x,y,z (in units of the object's radius): aim at a detail (a pod, a seam, a logo) for macro shots
+    if O.get("focus"): center = center + Vector(O["focus"]) * radius
+    log("frame", tuple(round(v, 3) for v in center), round(radius, 3))
     cam_d = bpy.data.cameras.new("cam"); cam_d.lens = fov_mm
     cam = bpy.data.objects.new("cam", cam_d); bpy.context.collection.objects.link(cam); sc.camera = cam
     fov = 2 * math.atan(cam_d.sensor_width / (2 * fov_mm)) * min(1, sc.render.resolution_y / sc.render.resolution_x) * 1.0
@@ -104,7 +107,14 @@ def frame_objects(sc, objs, angle=30, fov_mm=85, margin=1.35):
     cam.location = center + Vector((0, -dist * math.cos(a), dist * math.sin(a)))
     cam.rotation_euler = (center - cam.location).to_track_quat("-Z", "Y").to_euler()
     if O.get("dof"):
-        cam_d.dof.use_dof = True; cam_d.dof.focus_distance = dist; cam_d.dof.aperture_fstop = O.get("fstop", 2.8)
+        # focus on the SURFACE the camera sees (ray cast), not the object's centre
+        focus = dist
+        try:
+            bpy.context.view_layer.update()
+            hit, loc, *_ = sc.ray_cast(bpy.context.evaluated_depsgraph_get(), cam.location, (center - cam.location).normalized())
+            if hit: focus = (loc - cam.location).length
+        except Exception: pass
+        cam_d.dof.use_dof = True; cam_d.dof.focus_distance = focus; cam_d.dof.aperture_fstop = O.get("fstop", 2.8)
     return cam, center, radius, dist
 
 def light_rig(sc, center, radius):
@@ -248,15 +258,29 @@ if O.get("color") and MODE == "render" and O.get("recolor"):
             b = next((n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None) if m and m.use_nodes else None
             if b: b.inputs["Base Color"].default_value = hex_rgb(O["color"])
 
-set_engine(sc)
-cam, center, radius, dist = frame_objects(sc, objs, O.get("angle", 25), O.get("lens", 85), O.get("margin", 1.3))
-light_rig(sc, center, radius)
-
-if O.get("export"):
+if O.get("export"):  # export at the model's real size, BEFORE the render-only normalisation below
     exp = os.path.abspath(O["export"]); os.makedirs(os.path.dirname(exp), exist_ok=True)
     for o in bpy.data.objects: o.select_set(o in objs)
     bpy.ops.export_scene.gltf(filepath=exp, export_format="GLB", use_selection=True, export_apply=True)
     log("exported", exp)
+
+# normalise to ~1 m radius for rendering: depth of field, light falloff and cove size then behave the same for a
+# 15 cm earbud and a 2 m sofa (a real f/4 at macro distance on a tiny object is paper-thin)
+def normalise(objs):
+    pts = [o.matrix_world @ Vector(c) for o in objs if o.type == "MESH" for c in o.bound_box]
+    if not pts: return
+    lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts))); hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+    r = max((hi - lo).length / 2, 1e-4); k = 1.0 / r
+    root = bpy.data.objects.new("normalise", None); bpy.context.collection.objects.link(root)
+    for o in objs:
+        if o.parent is None: o.parent = root
+    root.scale = (k, k, k); bpy.context.view_layer.update()
+normalise(objs)
+
+set_engine(sc)
+cam, center, radius, dist = frame_objects(sc, objs, O.get("angle", 25), O.get("lens", 85), O.get("margin", 1.3))
+light_rig(sc, center, radius)
+
 
 fmt = O.get("format", "PNG").upper()
 fmts = [e.identifier for e in sc.render.image_settings.bl_rna.properties["file_format"].enum_items]

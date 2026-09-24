@@ -5,7 +5,8 @@
 //   forge model <polyhaven-id> [--res 1k] --out public/models  download a model → optimised .glb
 //   forge photos "<query>" --out public/img [--n 6]          CC0 photography (Openverse; Unsplash if UNSPLASH_ACCESS_KEY)
 //   forge render <model.glb> --out DIR [--light studio|dark|hero|warm] [--hdri id|file] [--size 1920x1080]
-//                [--transparent] [--angle 25] [--dof] [--samples 96] [--engine auto|eevee|cycles] [--name hero]
+//                [--shot product|hero|macro] [--focus x,y,z (object-radius units)] [--transparent] [--angle 25] [--dof]
+//                [--samples 96] [--engine auto|eevee|cycles] [--name hero]
 //   forge sequence <model.glb> --out DIR [--frames 120] [--path orbit|dolly|rise] [...render options]
 //                → frame_0001.webp… + sequence.json (for a scroll-scrubbed canvas image sequence)
 //   forge procedural <glass-blob|chrome-knot|liquid-metal|crystal-cluster|silk-ribbon> --out DIR [--color #hex]
@@ -51,9 +52,13 @@ async function hdriPath(v) {
   return f;
 }
 const size = () => (opt("size", "1920x1080")).split("x").map(Number);
-const renderOpts = async () => ({ light: opt("light", "studio"), hdri: await hdriPath(opt("hdri")), size: size(), transparent: flag("transparent"),
-  angle: +opt("angle", 25), dof: flag("dof"), samples: +opt("samples", 96), engine: opt("engine", "auto"), name: opt("name", "hero"),
-  color: opt("color"), bg: opt("bg"), margin: +opt("margin", 1.15), lens: +opt("lens", 85), format: opt("format", "PNG") });
+// shot presets: product = whole object, hero = fills the frame, macro = a detail at 135mm with shallow depth of field
+const SHOTS = { product: { margin: 1.15, lens: 85 }, hero: { margin: 0.9, lens: 85 }, macro: { margin: 0.28, lens: 135, dof: true, fstop: 4 } };
+const shot = () => SHOTS[opt("shot", "product")] || SHOTS.product;
+const renderOpts = async () => ({ ...shot(), light: opt("light", "studio"), hdri: await hdriPath(opt("hdri")), size: size(), transparent: flag("transparent"),
+  angle: +opt("angle", 25), dof: flag("dof") || shot().dof || false, fstop: +opt("fstop", shot().fstop || 2.8), samples: +opt("samples", 96), engine: opt("engine", "auto"), name: opt("name", "hero"),
+  color: opt("color"), bg: opt("bg"), margin: +opt("margin", shot().margin), lens: +opt("lens", shot().lens), format: opt("format", "PNG"),
+  focus: opt("focus") ? opt("focus").split(",").map(Number) : undefined });
 
 function optimize(input, output) {
   const r = spawnSync("npx", ["-y", "@gltf-transform/cli@4.5.0", "optimize", input, output, "--texture-compress", "webp", "--compress", "draco"], { stdio: "inherit", shell: platform() === "win32" });
