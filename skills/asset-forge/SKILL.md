@@ -17,6 +17,7 @@ description: Produce REAL visual assets for a website instead of drawing them wi
 | Photography (people, places, texture) | CC0 photos (Openverse; Unsplash with `UNSPLASH_ACCESS_KEY`) | `$F photos "brutalist concrete stair" --out public/img --n 6` |
 | Environment light / reflections | Poly Haven HDRI | `$F search hdris studio` → `$F hdri studio_small_09 --out public/hdri` |
 | Real-world object | Poly Haven model (CC0) → optimised glb | `$F search models chair` → `$F model ArmChair_01 --out public/models` |
+| **The product itself** (headphones, bottle, device, chair…) — no model exists | model it in headless Blender from the template | copy `scripts/templates/product_open_ear.py` → edit the curves/primitives/materials → `$F blender my_product.py -- --out public/models` → `$F optimize public/models/product.raw.glb public/models/product.glb` → render / sequence it |
 | Hero object with a material story | procedural Blender object | `$F procedural glass-blob --out public/models --light hero --color "#dfe8ff"` (also `chrome-knot`, `liquid-metal`, `crystal-cluster`, `silk-ribbon`) |
 | Product shot / plate from a model | headless Blender studio render | `$F render public/models/x.glb --out public/img --light dark --size 2400x1350 --dof` |
 | Apple-style scroll-scrubbed object | turntable / dolly / crane frames | `$F sequence public/models/x.glb --out public/seq --frames 120 --path orbit --size 1600x1000` |
@@ -24,11 +25,11 @@ description: Produce REAL visual assets for a website instead of drawing them wi
 | Illustration / painterly plate / texture | AI image (needs `OPENAI_API_KEY` or `FAL_KEY`) | `$F image "<prompt>" --out public/img/plate.png --size 1536x1024` |
 | Any other 3D model | Sketchfab CC0/CC-BY, Poly Pizza (via Blender MCP when Blender is open) or Hyper3D/Hunyuan AI 3D | `blender_search_sketchfab_models` → `blender_download_sketchfab_model` → `blender_export_scene` → `$F optimize` |
 
-Without an image-API key, `forge image` falls back to Pollinations (≈1024 px, watermark). Use it for **moodboards only**; ship photography or Blender renders instead.
+**Never plan core assets on `forge image` unless `OPENAI_API_KEY` or `FAL_KEY` is set.** Without an image-API key, `forge image` falls back to Pollinations (≈1024 px, watermark). Use it for **moodboards only**; ship photography or Blender renders instead.
 
 ## Lighting presets (`--light`)
 - `studio`: neutral HDRI plus a soft key and rim.
-- `dark`: near-black cove with split cold/warm rims; very editorial.
+- `dark`: the object floats on true black (no cove), split cold/warm rim light only — the museum-vitrine / luxury-product look.
 - `hero`: warm key, cool rim, kick light.
 - `warm`: paper-white cove with soft daylight.
 

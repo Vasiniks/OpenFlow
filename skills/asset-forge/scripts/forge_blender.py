@@ -85,7 +85,7 @@ def area(name, loc, energy, size, color="#ffffff", target=(0, 0, 0)):
 
 PRESETS = {  # HDRI strength, backdrop, lights (name, location, watts, size, color)
     "studio": dict(strength=1.0, bg=None, lights=[("key", (4, -4, 5), 800, 3, "#ffffff"), ("rim", (-4, 4, 3), 600, 2, "#dfe8ff")]),
-    "dark":   dict(strength=0.25, bg="#07070a", lights=[("rim_l", (-3.5, 2.5, 2), 1500, 1.2, "#8fb4ff"), ("rim_r", (3.5, 2.5, 1.5), 1300, 1.2, "#ff9a7a"), ("top", (0, 0, 5), 300, 4, "#ffffff")]),
+    "dark":   dict(strength=0.25, bg="#07070a", floor=False, lights=[("rim_l", (-3.5, 2.5, 2), 1500, 1.2, "#8fb4ff"), ("rim_r", (3.5, 2.5, 1.5), 1300, 1.2, "#ff9a7a"), ("top", (0, 0, 5), 300, 4, "#ffffff")]),
     "hero":   dict(strength=0.6, bg="#0b0b0f", lights=[("key", (3, -3, 4), 1200, 1.5, "#fff3e6"), ("rim", (-2.5, 3, 2.5), 2200, 0.8, "#9ec5ff"), ("kick", (0, 4, -1), 500, 2, "#ffffff")]),
     "warm":   dict(strength=0.9, bg="#efe8df", lights=[("key", (4, -3, 5), 700, 4, "#ffe2c4"), ("fill", (-4, -2, 2), 200, 5, "#fff6ee")]),
 }
@@ -113,7 +113,7 @@ def light_rig(sc, center, radius):
     s = max(radius, 0.1)
     for name, loc, w, size, col in p["lights"]:
         area(name, tuple(center + Vector(loc) * s), w * s * s, size * s, col, tuple(center))
-    if O.get("floor", p["bg"] is not None and not O.get("transparent")):
+    if O.get("floor", p.get("floor", True) and p["bg"] is not None and not O.get("transparent")):
         cove(center, radius, O.get("bg", p["bg"]) or "#15151a")
 
 def cove(center, r, color):

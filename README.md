@@ -65,6 +65,8 @@ Open a project in OpenCode, press **Tab** until the agent is `frontend`, then:
 make the sections pin and scrub on scroll                          # or just describe what you want
 ```
 
+**How to prompt it** (what to include, strong vs weak examples, follow-ups that move quality): [docs/PROMPTING.md](docs/PROMPTING.md).
+
 ### What makes it award-level
 - **`vf teardown <url>`** reverse-engineers any reference with Playwright. It captures:
   - the intro frames and a video;

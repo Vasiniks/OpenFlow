@@ -10,7 +10,8 @@
 //                → frame_0001.webp… + sequence.json (for a scroll-scrubbed canvas image sequence)
 //   forge procedural <glass-blob|chrome-knot|liquid-metal|crystal-cluster|silk-ribbon> --out DIR [--color #hex]
 //                [--seed n] [...render options] → <shape>.glb + hero render
-//   forge optimize <in.glb> <out.glb>                          gltf-transform: dedup, weld, Draco-free meshopt, WebP textures
+//   forge blender <script.py> [-- args]                        run your own bpy modelling script headless (bespoke products)
+//   forge optimize <in.glb> <out.glb>                          gltf-transform: dedup, weld, Draco geometry, WebP textures (Blender + three.js readable)
 //   forge image "<prompt>" --out file.png [--size 1536x1024]    AI image: OPENAI_API_KEY (gpt-image-1) or FAL_KEY (flux);
 //                                                               without a key: Pollinations (low-res, watermark) → moodboards only
 import { spawnSync } from "node:child_process";
@@ -55,7 +56,7 @@ const renderOpts = async () => ({ light: opt("light", "studio"), hdri: await hdr
   color: opt("color"), bg: opt("bg"), margin: +opt("margin", 1.15), lens: +opt("lens", 85), format: opt("format", "PNG") });
 
 function optimize(input, output) {
-  const r = spawnSync("npx", ["-y", "@gltf-transform/cli@4.5.0", "optimize", input, output, "--texture-compress", "webp", "--compress", "meshopt"], { stdio: "inherit", shell: platform() === "win32" });
+  const r = spawnSync("npx", ["-y", "@gltf-transform/cli@4.5.0", "optimize", input, output, "--texture-compress", "webp", "--compress", "draco"], { stdio: "inherit", shell: platform() === "win32" });
   if (r.status !== 0) die("gltf-transform optimize failed");
   const kb = (f) => (statSync(f).size / 1024).toFixed(0);
   console.log(`optimised ${basename(input)} ${kb(input)}KB → ${basename(output)} ${kb(output)}KB`);
@@ -107,6 +108,16 @@ switch (cmd) {
     const raw = join(out, `${shape}.raw.glb`);
     runBlender("procedural", { ...(await renderOpts()), light: opt("light", "hero"), shape, seed: +opt("seed", 7), out, export: raw, frames: +opt("frames", 0), path: opt("path", "orbit") });
     optimize(raw, join(out, `${shape}.glb`)); break;
+  }
+  case "blender": {
+    // run your own bpy script headless: it must build the object(s) and save a .blend or export a .glb itself
+    // (e.g. bpy.ops.export_scene.gltf(filepath=OUT + "/product.raw.glb", export_format="GLB")); argv after "--" is passed through
+    if (!pos[0] || !existsSync(pos[0])) die("blender <script.py> [-- args]");
+    const extra = rest.includes("--") ? rest.slice(rest.indexOf("--") + 1) : [];
+    const r = spawnSync(blender(), ["-b", "--factory-startup", "-P", resolve(pos[0]), "--", ...extra], { encoding: "utf8", maxBuffer: 1 << 26 });
+    process.stdout.write(r.stdout.split("\n").filter((l) => !/^(Blender|Read|Fra:|Warning: .*colormanagement)/.test(l)).slice(-40).join("\n") + "\n");
+    if (r.status !== 0 || /Traceback/.test(r.stderr + r.stdout)) { console.error(r.stderr.slice(-2000)); die("script failed"); }
+    break;
   }
   case "optimize": optimize(resolve(pos[0]), resolve(pos[1])); break;
   case "image": {
