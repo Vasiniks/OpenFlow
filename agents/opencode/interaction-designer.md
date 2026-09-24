@@ -3,6 +3,11 @@ description: Decides WHAT happens — navigation model, hover/focus/cursor behav
 mode: subagent
 temperature: 0.4
 permission:
+  external_directory:
+    "/var/folders/**": allow
+    "/private/var/folders/**": allow
+    "/tmp/**": allow
+    "/dev/**": allow
   task:
     "*": deny
     "motion-designer": allow

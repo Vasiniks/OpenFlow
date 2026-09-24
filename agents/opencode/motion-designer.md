@@ -3,6 +3,11 @@ description: Decides HOW things move — GSAP timelines, ScrollTrigger pin/scrub
 mode: subagent
 temperature: 0.3
 permission:
+  external_directory:
+    "/var/folders/**": allow
+    "/private/var/folders/**": allow
+    "/tmp/**": allow
+    "/dev/**": allow
   task:
     "*": deny
     "reference-analyst": allow

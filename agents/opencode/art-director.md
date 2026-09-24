@@ -3,6 +3,13 @@ description: Sets concrete visual direction — thesis, typography, color/materi
 mode: subagent
 temperature: 0.5
 permission:
+  external_directory:
+    "/var/folders/**": allow
+    "/private/var/folders/**": allow
+    "/tmp/**": allow
+    "/dev/**": allow
+    "~/.agents/skills/**": allow
+    "~/.openflow/**": allow
   task:
     "*": deny
     "threejs-art-director": allow

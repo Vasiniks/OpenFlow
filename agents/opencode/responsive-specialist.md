@@ -3,6 +3,13 @@ description: Determines how the design transforms across viewports (desktop → 
 mode: subagent
 temperature: 0.2
 permission:
+  external_directory:
+    "/var/folders/**": allow
+    "/private/var/folders/**": allow
+    "/tmp/**": allow
+    "/dev/**": allow
+    "~/.agents/skills/**": allow
+    "~/.openflow/**": allow
   task:
     "*": deny
     "visual-critic": allow

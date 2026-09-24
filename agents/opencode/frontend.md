@@ -4,9 +4,13 @@ mode: primary
 temperature: 0.3
 permission:
   external_directory:
+    "/var/folders/**": allow
+    "/private/var/folders/**": allow
     "/tmp/**": allow
     "/private/tmp/**": allow
     "~/.agents/skills/**": allow
+    "~/.openflow/**": allow
+    "/dev/**": allow
   task:
     "*": deny
     "reference-analyst": allow
@@ -73,6 +77,7 @@ Build it **complete**:
 - **Code:** use the playbook recipes R1–R8 as the starting code.
 - **Intro:** wire it last, once all sections exist.
 - **Placeholders are a defect.** That covers grey boxes, CSS gradients standing in for imagery, lorem, and TODO motion. If an asset is missing, ask asset-producer for it; never draw one.
+- **You never make assets yourself.** No curl-ing stock photos, no image-painting scripts (PIL, numpy, canvas, SVG generators). If asset-producer fails, read its error, fix the cause (a permission, a missing file, a bad path) and call it again with the error in the prompt. Assets come only from asset-producer: forge photos, Poly Haven, Blender renders and sequences of a modelled product, or the reference's own files.
 
 ## 4. Loop (the heart)
 ```

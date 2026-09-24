@@ -3,6 +3,11 @@ description: Makes the visual decisions for 3D scenes — camera, framing, scale
 mode: subagent
 temperature: 0.4
 permission:
+  external_directory:
+    "/var/folders/**": allow
+    "/private/var/folders/**": allow
+    "/tmp/**": allow
+    "/dev/**": allow
   task:
     "*": deny
     "reference-analyst": allow

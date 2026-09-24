@@ -3,6 +3,13 @@ description: Compares the current render against the reference (or the art-direc
 mode: subagent
 temperature: 0.1
 permission:
+  external_directory:
+    "/var/folders/**": allow
+    "/private/var/folders/**": allow
+    "/tmp/**": allow
+    "/dev/**": allow
+    "~/.agents/skills/**": allow
+    "~/.openflow/**": allow
   task:
     "*": deny
     "reference-analyst": allow

@@ -5,7 +5,7 @@ description: Produce REAL visual assets for a website instead of drawing them wi
 
 # Asset forge
 
-**Rule zero: never draw an asset with CSS, SVG paths, canvas 2D or divs.** Gradients-as-art, CSS "3D", div illustrations and hand-written SVG scenes are what make AI sites look like AI sites. Allowed authored vectors: logos/wordmarks, UI icons (Iconify/Lucide), data graphics.
+**Rule zero: never draw an asset with CSS, SVG paths, canvas 2D, divs, or image-painting code (PIL/numpy noise "brushed metal", generated gradients).** Gradients-as-art, CSS "3D", div illustrations and hand-written SVG scenes are what make AI sites look like AI sites. Allowed authored vectors: logos/wordmarks, UI icons (Iconify/Lucide), data graphics.
 
 `F=~/.agents/skills/asset-forge/scripts/forge` (Windows: `forge.cmd`). Every command prints credits; append them to `ATTRIBUTION.md`.
 

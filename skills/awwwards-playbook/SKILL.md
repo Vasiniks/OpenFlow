@@ -26,6 +26,7 @@ SOTD ≈ 8.0+/10 from ~18 jurors (outliers dropped). Design + Usability = 70%.
 | Signature moment | teardown motion map | ≥1 pinned or scrubbed sequence per page (horizontal track, image sequence, 3D camera move, scrubbed text) |
 | Choreography density | teardown `reveals` + `split_text` | every section has an authored entrance (split-line headings, clip/mask image reveals, staggered lists) |
 | Hover system | teardown `hover.json` | every link/button/card has a designed hover (text roll, underline draw, image scale/clip, magnetic) |
+| No empty viewports | contact sheet (`scroll-sheet-*.png`) | every screen carries content + a real asset; no dark/blank panels waiting for imagery |
 | Real assets | teardown `assets.json` + source grep | hero uses a real photo/render/video/glTF; **0 illustrations drawn with CSS/SVG/divs**; every asset credited |
 | 3D/shader (if used) | teardown `three.json` | tone mapping ACES/AgX, HDRI environment, PBR materials with real values; DPR ≤ 2; paused off-screen |
 | Transitions | teardown `transition` | route changes animate (View Transitions or GSAP overlay), not a hard cut |
