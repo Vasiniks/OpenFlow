@@ -35,6 +35,8 @@ const log = (s) => console.error(`[teardown] ${Math.round((Date.now() - T0) / 10
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const save = (f, o) => writeFileSync(join(OUT, f), typeof o === "string" ? o : JSON.stringify(o, null, 1));
 // Never let one hung page call eat the budget.
+// Page loads get 3 tries: a laptop switching network (ERR_NETWORK_CHANGED) or a slow hotspot shouldn't leave a blank page.
+const gotoRetry = async (pg, u, waitUntil, timeout = 60000) => { for (let k = 1; k <= 3; k++) { try { await pg.goto(u, { waitUntil, timeout }); return true; } catch (e) { log(`goto ${k}/3: ${e.message.split("\n")[0]}`); await sleep(5000 * k); } } return false; };
 const within = (p, ms, fallback = null) => Promise.race([Promise.resolve(p).catch(() => fallback), sleep(ms).then(() => fallback)]);
 
 // ------------------------------------------------------------------------------------------------ page hooks
@@ -53,6 +55,9 @@ const INIT = `(() => {
     et.addEventListener('observe', (e) => { const o = e.detail; if (!o) return; if (o.isScene) S.three.scenes.push(o); else if (o.domElement && o.render) S.three.renderers.push(o); });
     Object.defineProperty(window, '__THREE_DEVTOOLS__', { value: et, configurable: true });
   } catch (e) {}
+  S.fontFaces = [];
+  try { const ir = CSSStyleSheet.prototype.insertRule; CSSStyleSheet.prototype.insertRule = function (r, i) { try { if (/^\s*@font-face/i.test(r) && S.fontFaces.length < 600) S.fontFaces.push(String(r).slice(0, 3000)); } catch (e) {} return ir.call(this, r, i); }; } catch (e) {}
+  try { const FF = window.FontFace; if (FF) { const W = function (fam, src, d) { try { if (typeof src === 'string' && S.fontFaces.length < 600) S.fontFaces.push('@font-face{font-family:' + fam + ';src:' + src + ';font-weight:' + ((d && d.weight) || 'normal') + ';font-style:' + ((d && d.style) || 'normal') + '}'); } catch (e) {} return new FF(fam, src, d); }; W.prototype = FF.prototype; window.FontFace = W; } } catch (e) {}
   const raf = window.requestAnimationFrame.bind(window);
   window.requestAnimationFrame = (cb) => { S.raf++; return raf(cb); };
 })();`;
@@ -195,13 +200,14 @@ const browser = await launch();
 // Results so far; finalize() can write them at any point (after each phase, or from the watchdog).
 let stack0 = { libs: {}, canvases: [], videos: [], fonts: [], docHeight: 0 }, stack = null, rafPerSec = 0, cands = [], wheelTravel = 0, virtualScroll = false, gl = "unknown";
 let motion = { scroll_linked: [], reveals: [], pinned: [], fixed: [] }, hovers = [], cursor = { custom_cursor: false }, pointer = [], states = [];
-let three = null, shaders = [], transitions = [], frames = [], pages = [], links = [];
+let three = null, shaders = [], transitions = [], frames = [], pages = [], links = [], fontRules = [];
 const phasesDone = [], phasesCut = [];
 const norm = (u) => u.split("#")[0].split("?")[0].replace(/\/$/, "");
 const seen = new Set([norm(url)]);
 const ctxOpts = (video) => ({ viewport: { width: VW, height: VH }, userAgent: UA, deviceScaleFactor: 1, ...(video && VIDEO ? { recordVideo: { dir: join(OUT, "_video"), size: { width: VW, height: VH } } } : {}) });
 
 const bundleTexts = [], assets = new Map();
+const fontExt = (b) => { const m = b.subarray(0, 4).toString("latin1"); return m === "wOF2" ? ".woff2" : m === "wOFF" ? ".woff" : m === "OTTO" ? ".otf" : b.readUInt32BE(0) === 0x10000 || m === "true" ? ".ttf" : ""; };
 function watchNetwork(page) {
   page.on("response", async (res) => {
     try {
@@ -227,7 +233,7 @@ function watchNetwork(page) {
         if (!buf) return;
         entry.bytes = buf.length;
         if (kind === "json" && !/"layers"\s*:/.test(buf.slice(0, 20000).toString())) { assets.delete(u); return; }  // keep only Lottie JSON
-        const cext = ext || ({ "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/avif": ".avif", "image/svg+xml": ".svg", "image/gif": ".gif", "font/woff2": ".woff2", "font/woff": ".woff" }[entry.type] || "");
+        const cext = (kind === "font" && !ext ? fontExt(buf) : "") || ext || ({ "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/avif": ".avif", "image/svg+xml": ".svg", "image/gif": ".gif", "font/woff2": ".woff2", "font/woff": ".woff" }[entry.type] || "");
         // keep the source file name readable (image-intro01-2c7afe47.webp); assets.json maps every file back to its URL
       // last two path segments, so /interview/takashidoi01/hero-top.webp → takashidoi01-hero-top
       const stem = decodeURIComponent(new URL(u).pathname.split("/").filter(Boolean).slice(-2).join("-")).replace(/\.[^.]*$/, "").replace(/[^a-z0-9_-]+/gi, "-").slice(-48).replace(/^-+/, "");
@@ -245,7 +251,7 @@ let introReadyMs = 0;
   const ctx = await browser.newContext(ctxOpts(true)); await ctx.addInitScript(INIT);
   const page = await ctx.newPage(); watchNetwork(page);
   const t0 = Date.now();
-  await page.goto(url, { waitUntil: "commit", timeout: 60000 }).catch((e) => log(`goto: ${e.message}`));
+  await gotoRetry(page, url, "commit");
   let prevSize = 0;
   for (const t of [300, 700, 1200, 1800, 2600, 3600, 5000, 7000]) {
     await sleep(Math.max(0, t - (Date.now() - t0)));
@@ -263,7 +269,7 @@ log(`main pass (${browser.__gl} WebGL)`);
 setTimeout(() => { log("budget exceeded, writing partial results"); try { finalize(); } catch (e) { log(`finalize: ${e.message}`); } process.exit(0); }, BUDGET_MS + 60000).unref();
 const ctx = await browser.newContext(ctxOpts(false)); await ctx.addInitScript(INIT);
 const page = await ctx.newPage(); watchNetwork(page);
-await page.goto(url, { waitUntil: "load", timeout: 60000 }).catch((e) => log(`goto: ${e.message}`));
+if (!(await gotoRetry(page, url, "domcontentloaded"))) phasesCut.push("the page never finished loading (network): everything below is unreliable");
 await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});  // WebGL/analytics sites never go idle
 await sleep(Math.max(4000, introReadyMs + 1500));
 gl = await glRenderer(page);
@@ -361,7 +367,13 @@ if (splitScroll.length) {
 }
 phasesDone.push("scroll motion map");
 // runtime evidence (again before the transitions below navigate away and reset the hooks)
+// cssText keeps URLs as authored ("/f/x.woff"), so resolve them against the stylesheet (or page) to match assets.json
+const collectFontRules = (pg) => within(pg.evaluate(() => {
+  const abs = (r, base) => r.replace(/url\(\s*["']?([^"')]+)["']?\s*\)/g, (m, u) => { try { return `url("${new URL(u, base).href}")`; } catch { return m; } });
+  return [...(window.__td?.fontFaces || []).map((r) => abs(r, location.href)), ...[...document.styleSheets].flatMap((sh) => { try { return [...sh.cssRules].filter((r) => r.type === 5).map((r) => abs(r.cssText, sh.href || location.href)); } catch { return []; } })];
+}), 10000, []).then((rs) => { for (const r of rs || []) if (!fontRules.includes(r)) fontRules.push(r); });
 const runtimeEvidence = async () => {
+  await collectFontRules(page);
   three = (await within(page.evaluate(threeScene), 10000)) || three;
   for (const s of (await within(page.evaluate(() => window.__td?.shaders || []), 10000, []))) if (!shaders.includes(s)) shaders.push(s);
   stack = { ...stack0, ...((await within(page.evaluate(pageStack), 15000)) || {}), raf_calls_per_sec: rafPerSec };
@@ -539,7 +551,7 @@ while (queue.length && pages.length < MAX_PAGES) {
   const slug = new URL(link).pathname.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root";
   mkdirSync(join(OUT, "pages", slug), { recursive: true });
   try {
-    await p2.goto(link, { waitUntil: "load", timeout: 45000 }).catch(() => {});
+    await gotoRetry(p2, link, "domcontentloaded", 45000);
     await p2.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
     await sleep(Math.max(2500, introReadyMs + 1500));  // same preloader budget as the home page
     const st = (await within(p2.evaluate(pageStack), 15000)) || { title: "", docHeight: 0, libs: {}, canvases: [] };
@@ -555,6 +567,7 @@ while (queue.length && pages.length < MAX_PAGES) {
     pages.push({ url: link, slug, title: st.title, docHeight: st.docHeight, libs: st.libs, canvases: st.canvases.length, screenshots: n + 1 });
     const more = await p2.evaluate((origin) => [...document.querySelectorAll("a[href]")].map((a) => a.href.split("#")[0]).filter((h) => h.startsWith(origin) && !/\.(pdf|jpg|png|zip|mp4)$/i.test(h)), origin).catch(() => []);
     for (const l of more) if (!seen.has(norm(l))) { seen.add(norm(l)); queue.push(l); }
+    await collectFontRules(p2);
     const sh = await within(p2.evaluate(() => window.__td?.shaders || []), 8000, []); for (const s of sh) if (!shaders.includes(s)) shaders.push(s);
   } catch (e) { pages.push({ url: link, error: e.message.slice(0, 120) }); }
   await c2.close();
@@ -571,7 +584,7 @@ if (ASSETS) {
       const r = await fetch(a.url, { headers: { "user-agent": UA, referer: url }, signal: AbortSignal.timeout(60000) });
       if (!r.ok) continue;
       const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > 60e6) continue;
-      const ext = extname(new URL(a.url).pathname).toLowerCase();
+      const ext = (a.kind === "font" && !extname(new URL(a.url).pathname) ? fontExt(buf) : "") || extname(new URL(a.url).pathname).toLowerCase();
       const stem = decodeURIComponent(new URL(a.url).pathname.split("/").filter(Boolean).slice(-2).join("-")).replace(/\.[^.]*$/, "").replace(/[^a-z0-9_-]+/gi, "-").slice(-48).replace(/^-+/, "");
       const name = `${a.kind}-${stem ? `${stem}-` : ""}${createHash("sha1").update(a.url).digest("hex").slice(0, 8)}${ext}`;
       writeFileSync(join(OUT, "assets", name), buf); a.saved = `assets/${name}`; a.bytes = buf.length; a.fetched_after = true; got++;
@@ -603,6 +616,17 @@ save("motion.json", motion);
 save("hover.json", { hovers, cursor });
 save("three.json", three || { note: "no three.js scene observed (not three.js, or three < r127 without the devtools hook)" });
 save("assets.json", assetList);
+const fontMap = [];
+for (const r of fontRules) {
+  const fam = (r.match(/font-family:\s*["']?([^;"'}]+)/i) || [])[1]?.trim(); if (!fam) continue;
+  const weight = (r.match(/font-weight:\s*([^;}]+)/i) || [])[1]?.trim() || "normal", style = (r.match(/font-style:\s*([^;}]+)/i) || [])[1]?.trim() || "normal";
+  for (const [, u] of r.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/g)) {
+    const hit = assets.get(u) || [...assets.values()].find((a) => a.url.split("?")[0] === u.split("?")[0]);
+    if (hit?.saved && !fontMap.some((f) => f.saved === hit.saved && f.family === fam)) fontMap.push({ family: fam, weight, style, url: u, saved: hit.saved });
+  }
+}
+save("fonts.json", fontMap);
+save("fonts.css", fontMap.map((f) => `@font-face { font-family: "${f.family}"; src: url("./${f.saved}")${/\.woff2$/.test(f.saved) ? ' format("woff2")' : /\.woff$/.test(f.saved) ? ' format("woff")' : ""}; font-weight: ${f.weight}; font-style: ${f.style}; font-display: swap; }`).join("\n") + "\n");
 save("states.json", states);
 
 const top = (arr, n = 6) => arr.slice(0, n).map(([k, v]) => `${k} ×${v}`).join(", ");
@@ -617,6 +641,7 @@ L.push(`- runtime: ${JSON.stringify(stackNow.libs)}`);
 L.push(`- bundle keywords: ${Object.entries(bundles.keyword_hits).sort((a, b) => b[1] - a[1]).slice(0, 24).map(([k, v]) => `${k}:${v}`).join(" · ")}`);
 L.push(`- canvases: ${stackNow.canvases.map((c) => `${c.ctx} ${c.w}×${c.h}${c.fixed ? " fixed" : ""} @${c.top}px`).join("; ") || "none"} · videos: ${stackNow.videos.length} · rAF calls/s: ${stackNow.raf_calls_per_sec}`);
 L.push(`- fonts loaded: ${stackNow.fonts.join(", ") || "none detected"}`);
+L.push(`- font files → families: ${fontRules.length ? "fonts.json / fonts.css (copy fonts.css and the files it names; it maps each family to its saved file)" : "no @font-face rules captured"}`);
 L.push("", "## Motion vocabulary from the code");
 L.push(`- GSAP eases: ${top(bundles.gsap_eases, 8) || "—"}`, `- durations: ${top(bundles.durations, 8) || "—"} · staggers: ${top(bundles.staggers, 5) || "—"}`);
 L.push(`- ScrollTrigger start/end: ${top(bundles.scroll_starts, 5) || "—"} / ${top(bundles.scroll_ends, 5) || "—"} · scrub: ${top(bundles.scrub_values, 4) || "—"}`);

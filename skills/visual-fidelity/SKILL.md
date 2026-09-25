@@ -46,6 +46,7 @@ Read `teardown.md` first, then LOOK at the evidence it lists. It records:
 - **Menu/tab states and a page transition,** each as a frame sequence.
 - **Other routes** (screenshots per step) and the **real assets:** fonts, glb/gltf/ktx2/hdr, Lottie JSON, Rive, the largest images.
   - **`assets.json` maps every saved file to its source URL.**
+  - **`fonts.json` / `fonts.css`** map each font family to its saved file. They capture `@font-face` rules added at runtime too (FontPlus/Adobe Fonts inject them via `insertRule`/`FontFace` with extensionless glyph-subset URLs). Font files get their extension from their magic bytes.
   - **File names** keep the last two URL segments (`image-takashidoi01-hero-top-1f36699d.webp`), so each photo can be put where the reference uses it.
 
 - **Pointer probe:** the regions that react when the mouse moves (ambient animation excluded), and the elements that move with the mouse (parallax, magnetic).
