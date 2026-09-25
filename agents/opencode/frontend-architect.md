@@ -18,8 +18,11 @@ permission:
   bash:
     "*": deny
     "ls *": allow
+    "rtk ls *": allow
     "cat package.json": allow
+    "rtk read package.json": allow
     "cat components.json": allow
+    "rtk read components.json": allow
 tools:
   "playwright_*": false
   "blender_*": false

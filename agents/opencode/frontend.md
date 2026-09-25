@@ -106,6 +106,7 @@ Create a todo list with STEP 0–9 now, and tick each step as you finish it.
 ## STEP 2 — assets (before any code)
 Call `task({ subagent_type: "asset-producer", … })` with every `asset` and `3d` row. It copies the reference's own files from `.design/ref/teardown/assets/` first, then uses Blender and CC0 sources for the rest, and writes `.design/asset-map.md`.
 
+- **Verify by file:** `ls` every path the asset map lists. If the reply says **BLOCKED**, or a file is missing, run its `cp`/`curl` block yourself (your bash can copy assets; only source edits go through builder), then `ls` again.
 - **Loop:** if it fails or reports something missing, read the error, fix the cause, and call it again (max 3 times per asset).
 - **Never make assets yourself.** No curl'd stock photos, no image-painting scripts, no CSS or SVG art.
 - **Never use teardown screenshots** (`steps/`, `intro/`, `progress/`, `pages/`, `states/`) as images in the build. That's tracing, not recreating: it games the pixel diff and hides the missing scene.

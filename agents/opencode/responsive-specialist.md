@@ -20,6 +20,7 @@ permission:
     "*": deny
     "*visual-fidelity/scripts/vf *": allow
     "ls *": allow
+    "rtk ls *": allow
 tools:
   "blender_*": false
   "github_*": false

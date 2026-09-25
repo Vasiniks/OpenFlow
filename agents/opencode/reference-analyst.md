@@ -19,6 +19,7 @@ permission:
     "*visual-fidelity/scripts/vf capture*": allow
     "*visual-fidelity/scripts/vf teardown*": allow
     "ls *": allow
+    "rtk ls *": allow
 tools:
   "blender_*": false
   "github_*": false

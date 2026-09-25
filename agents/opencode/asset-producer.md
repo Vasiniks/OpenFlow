@@ -23,6 +23,7 @@ permission:
     "*asset-forge/scripts/forge *": allow
     "*visual-fidelity/scripts/vf capture*": allow
     "ls *": allow
+    "rtk ls *": allow
     "mkdir -p *": allow
     "cp *": allow
     "cp ~/.agents/skills/asset-forge/scripts/templates/*": allow
@@ -62,6 +63,7 @@ You make the pixels and meshes the page is built from. **A page with no real ima
 | 10 LOOK at every output | `read` each render or photo | re-render with a different angle, lens or light until it looks like a campaign image, not a default 3D render |
 
 **Rules:**
+- **Never claim a file you didn't produce.** Write a manifest, CSS or asset-map line only for files that exist (`ls` them). If a copy or download is blocked, report **BLOCKED** at the top of your reply with the exact `cp`/`curl` commands for the orchestrator to run, and leave those files out of the CSS.
 - **Never ship a screenshot as an asset.** Files under the teardown's `steps/`, `intro/`, `progress/`, `pages/` and `states/` are *evidence*: they have the UI, text and WebGL baked into the pixels. Only files under `.design/ref/teardown/assets/` (or downloaded from their URLs) are assets. A 3D fallback poster is rendered from the build's own scene, or it's a real reference file.
 - **RECREATE: put every reference file where its URL says it belongs.** "Representative" or guessed assignments (hash X is probably person Y) are defects. If the URL can't be determined, `read` the image, match it to the reference screenshot, and say so in the asset map.
 - **Fonts (RECREATE):** copy the files named in `.design/ref/teardown/fonts.css` to `public/fonts/`, and ship that CSS with the paths rewritten. It maps each font family (e.g. `TazuganeGothicStdN-Regular`) to its saved file, including webfont services (FontPlus, Adobe Fonts) that serve extensionless glyph subsets. List the family names in the asset map so builder uses them, not Geist/Inter. Note that these fonts are licensed to the reference site; they're for local recreation only.
