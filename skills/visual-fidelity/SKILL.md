@@ -49,6 +49,12 @@ Read `teardown.md` first, then LOOK at the evidence it lists. It records:
   - **`fonts.json` / `fonts.css`** map each font family to its saved file. They capture `@font-face` rules added at runtime too (FontPlus/Adobe Fonts inject them via `insertRule`/`FontFace` with extensionless glyph-subset URLs). Font files get their extension from their magic bytes.
   - **File names** keep the last two URL segments (`image-takashidoi01-hero-top-1f36699d.webp`), so each photo can be put where the reference uses it.
 
+- **Motion paths:** the shape each moving thing travels, measured rather than described:
+  - scroll-linked DOM elements;
+  - three.js meshes (projected to screen);
+  - the camera.
+
+  Each one is classified as loop, spiral, arc or line, with its centre, radius, sweep and direction (teardown.md → *Motion PATHS*, `motion.json` → `path`, `three.json` → `trajectories`). `vf feel` compares them (row "motion paths"). A photo loop is not a "float in".
 - **Pointer probe:** the regions that react when the mouse moves (ambient animation excluded), and the elements that move with the mouse (parallax, magnetic).
 - **Up to 3 page transitions** filmed there and back.
 - **A breadth-first crawl of the whole site** (`--pages 12` by default; use 20 for recreations).

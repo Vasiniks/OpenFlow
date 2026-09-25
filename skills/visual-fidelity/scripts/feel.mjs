@@ -54,6 +54,9 @@ count("scroll-scrubbed split text", (R.motion.split_scroll || []).length, (C.mot
 // pacing: the same story needs about the same scroll distance, or every pin and scrub runs too fast (or too slow)
 { const scr = (x) => +(((x.stack.stack?.docHeight) || 0) / 900).toFixed(1), r = scr(R), c = scr(C), d = r ? Math.abs(c - r) / r : 0;
   rows.push({ name: "home page length (screens)", ref: r, cur: c, st: !r ? "=" : d <= 0.15 ? "✓" : d <= 0.35 ? "~" : "✗", note: "within ±15% = same pacing" }); }
+// motion PATHS: the shapes things travel (a photo loop is not a float), DOM + WebGL + camera
+const shapes = (x) => [...(x.motion.scroll_linked || []).filter((p) => p.path).map((p) => `DOM ${p.path.shape}`), ...((x.three?.trajectories?.objects) || []).filter((o) => o.shape !== "line/drift").map((o) => `WebGL ${o.shape}`), ...(x.three?.trajectories?.camera?.moves ? ["camera move"] : [])];
+set("motion paths (loop / spiral / arc / camera)", shapes(R), shapes(C), "same shapes = same choreography; see teardown.md → Motion PATHS for radius/sweep/direction");
 count("pinned sections", Math.max((R.motion.pinned || []).length, libs(R).scrolltrigger?.pins || 0), Math.max((C.motion.pinned || []).length, libs(C).scrolltrigger?.pins || 0));
 set("easing vocabulary (top GSAP eases)", eases(R), eases(C));
 count("typical duration (s, median)", median(R.stack.bundles?.durations || []), median(C.stack.bundles?.durations || []), "compare the numbers, not the ratio");

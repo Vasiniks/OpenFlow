@@ -79,6 +79,8 @@ Rules:
 
 Output: ONLY this, ≤120 lines.
 ```
+## Paths             (every entry in teardown.md → Motion PATHS and three.json → trajectories, as an implementable spec: parametric formula or GSAP MotionPath points, e.g. `angle = progress·(-298°)`, `x = cx + r·cos(angle)`, `y = cy + r·sin(angle)`, `rotY = angle`, with centre, radius, sweep, direction and scroll range; per-object phase offsets for groups. Never "float in / drift")
+## Per-section signature (one line per section: the motion that is ONLY that section's, from the reference. No two sections share a generic reveal unless the reference does.)
 ## Evidence          (teardown files you took values from; "(from frames)" where inferred)
 ## Motion character  (1–2 lines, from art-direction: tempo, weight, easing family)
 ## Intro timeline    (beat · element · from→to · start offset ms · duration · ease)

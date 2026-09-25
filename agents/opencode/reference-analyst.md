@@ -67,6 +67,7 @@ A spec that says "smooth animations" or "nice hover" is a failure. A spec that s
    hover/interaction · mobile change · reduced-motion behaviour
 ## 5. Global interactions  nav (hover roll? underline draw?), menu open sequence, cursor, buttons, cards, marquee
 ## 6. Page transitions     frames + mechanism (client-side? overlay? view transition?)
+## 6b. Motion paths        every entry in teardown.md → Motion PATHS + three.json → trajectories, confirmed by LOOKING at the progress frames: what travels (which photos/meshes), the shape (loop/spiral/arc), centre, radius, sweep and direction per scroll range, spin, phase offsets across a group, and the camera path
 ## 7. 3D / WebGL           renderer (tone mapping, exposure, colour space, dpr), camera, lights (type/colour/intensity/pos), materials (all PBR values), meshes/models (files), custom shaders (files + uniforms + what they draw), post-processing
 ## 8. Typography           families + weights + the exact font FILES (teardown/assets or network URLs)
 ## 9. Colour & material    palette (hex, roles), grain/noise/overlays, image treatment

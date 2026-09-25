@@ -92,6 +92,25 @@ function pageStack() {
   return { libs, canvases, videos, fonts: [...new Set(fonts)], bodyCursor: cursor, docHeight: d.documentElement.scrollHeight, title: d.title, rafCallsSoFar: w.__td?.raf };
 }
 
+// three.js positions for this scroll step: every mesh (world + screen-projected) and the camera, so paths are measurable
+function sampleThree() {
+  const T = window.__td?.three; if (!T || !T.scenes.length) return null;
+  for (const r of T.renderers) if (r.render && !r.__tdWrapped) { const o = r.render.bind(r); r.render = (sc, c) => { r.__tdCam = c; return o(sc, c); }; r.__tdWrapped = true; }
+  const cam = T.renderers.map((r) => r.__tdCam).find(Boolean);
+  const out = { cam: null, objs: {} }; window.__tdN = window.__tdN || 0;
+  if (cam) { const v = cam.position.clone(); cam.getWorldPosition(v); out.cam = [v.x, v.y, v.z].map((n) => +n.toFixed(3)); }
+  let n = 0;
+  for (const sc of T.scenes.slice(0, 6)) sc.traverse((o) => {
+    if (!(o.isMesh || o.isPoints) || n >= 120) return; n++;
+    if (!o.__tdId) o.__tdId = ++window.__tdN;
+    const w = o.position.clone(); o.getWorldPosition(w);
+    let scr = null; if (cam) { const p = w.clone().project(cam); if (p.z < 1 && Math.abs(p.x) < 1.6 && Math.abs(p.y) < 1.6) scr = [Math.round((p.x + 1) * innerWidth / 2), Math.round((1 - p.y) * innerHeight / 2)]; }
+    const m = [].concat(o.material)[0];
+    out.objs[o.__tdId] = { name: o.name || undefined, kind: o.isPoints ? "points" : m?.map || m?.uniforms?.uImage || m?.uniforms?.uTexture ? "image-plane/textured" : o.geometry?.type, vis: o.visible, w: [w.x, w.y, w.z].map((x) => +x.toFixed(3)), scr, ry: +o.rotation.y.toFixed(3) };
+  });
+  return out;
+}
+
 function threeScene() {
   const T = window.__td?.three; if (!T || (!T.scenes.length && !T.renderers.length)) return null;
   const hex = (c) => (c && c.getHexString ? "#" + c.getHexString() : undefined);
@@ -174,6 +193,21 @@ function fitEase(samples) {
   return best && best.err < 0.15 ? { duration_ms: best.dur, ease: best.ease } : null;
 }
 
+// Classify a 2D path (screen px or world units): loop/orbit, spiral, arc or line, with centre, radius, sweep and direction.
+function pathShape(pts, unit = "px") {
+  pts = pts.filter(Boolean); if (pts.length < 4) return null;
+  const span = Math.max(Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1])) - Math.min(...pts.map((p) => p[1])));
+  if (span < (unit === "px" ? 24 : 0.05)) return null;
+  const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cy = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+  const ds = pts.map((p) => Math.hypot(p[0] - cx, p[1] - cy)), r = ds.reduce((a, d) => a + d, 0) / ds.length;
+  const spread = r ? Math.sqrt(ds.reduce((a, d) => a + (d - r) ** 2, 0) / ds.length) / r : 1;
+  let sweep = 0; for (let i = 1; i < pts.length; i++) { let d = Math.atan2(pts[i][1] - cy, pts[i][0] - cx) - Math.atan2(pts[i - 1][1] - cy, pts[i - 1][0] - cx); while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; sweep += d; }
+  const deg = Math.round((sweep * 180) / Math.PI), grow = ds[ds.length - 1] - ds[0];
+  const shape = Math.abs(deg) >= 270 ? (Math.abs(grow) > r * 0.5 ? "spiral" : "loop/orbit") : Math.abs(deg) >= 60 && spread < 0.4 ? "arc" : "line/drift";  // ≥270°: sampling rarely catches a full turn
+  const k = Math.max(1, Math.ceil(pts.length / 12)), rnd = (v) => (unit === "px" ? Math.round(v) : +v.toFixed(2));
+  return { shape, sweep_deg: deg, direction: deg >= 0 ? "clockwise on screen" : "counter-clockwise on screen", center: [rnd(cx), rnd(cy)], radius: rnd(r), radius_change: rnd(grow), unit, points: pts.filter((_, i) => i % k === 0).map((p) => p.map(rnd)) };
+}
+
 // ------------------------------------------------------------------------------------------------ bundle analysis
 const KEYWORDS = ["gsap", "ScrollTrigger", "SplitText", "Flip", "DrawSVG", "MorphSVG", "CustomEase", "Observer", "ScrollSmoother", "Lenis", "locomotive", "barba", "swup", "taxi", "THREE", "WebGLRenderer", "ShaderMaterial", "RawShaderMaterial", "EffectComposer", "UnrealBloomPass", "@react-three", "postprocessing", "ogl", "curtains", "pixi", "matter", "howler", "theatre", "lottie", "rive", "swiper", "embla", "splitting", "gl_FragColor", "gl_FragCoord", "simplex", "snoise", "fbm", "curlNoise", "MeshTransmissionMaterial", "MeshPhysicalMaterial", "RGBELoader", "HDRLoader", "DRACOLoader", "KTX2Loader", "GLTFLoader", "InstancedMesh", "Points", "requestAnimationFrame", "IntersectionObserver", "clip-path", "mix-blend-mode", "View Transition"];
 function analyzeBundles(texts) {
@@ -200,7 +234,7 @@ const browser = await launch();
 // Results so far; finalize() can write them at any point (after each phase, or from the watchdog).
 let stack0 = { libs: {}, canvases: [], videos: [], fonts: [], docHeight: 0 }, stack = null, rafPerSec = 0, cands = [], wheelTravel = 0, virtualScroll = false, gl = "unknown";
 let motion = { scroll_linked: [], reveals: [], pinned: [], fixed: [] }, hovers = [], cursor = { custom_cursor: false }, pointer = [], states = [];
-let three = null, shaders = [], transitions = [], frames = [], pages = [], links = [], fontRules = [];
+let three = null, shaders = [], transitions = [], frames = [], pages = [], links = [], fontRules = [], threeTraj = { camera: null, objects: [] };
 const phasesDone = [], phasesCut = [];
 const norm = (u) => u.split("#")[0].split("?")[0].replace(/\/$/, "");
 const seen = new Set([norm(url)]);
@@ -286,12 +320,14 @@ const stepPx = longPage ? Math.max(Math.round(VH * 0.5), Math.round(stack0.docHe
 const sample = () => within(page.evaluate(sampleCandidates), 10000);
 let stuck = 0;
 const pageMoved = [true];  // pageMoved[s] = content moved between step s-1 and s
+const threeSteps = [];
 for (let s = 0; s < MAX_STEPS; s++) {
   if (past(0.5) && s >= 4) { phasesCut.push(`scroll motion map stopped at step ${s} of ${MAX_STEPS} (${Math.round(wheelTravel / VH)} screens); the rest of the page is only in the scroll sheets`); break; }
   const series = [];
   for (const t of [0, 300, 1000]) { if (t) await sleep(t - (series.length ? series[series.length - 1].t : 0)); const r = await sample(); if (r) series.push({ t, ...r }); }
   if (!series.length) { phasesCut.push(`page stopped answering at step ${s}`); break; }
   samples.push(series);
+  threeSteps.push(await within(page.evaluate(sampleThree), 8000));
   await within(page.screenshot({ path: join(OUT, "steps", `s${String(s).padStart(2, "0")}.jpg`), quality: 62, type: "jpeg" }), 15000);
   // wheel like a person (works with Lenis/Locomotive/virtual scrollers, unlike scrollTo)
   await page.mouse.move(VW / 2, VH / 2);
@@ -308,6 +344,28 @@ for (let s = 0; s < MAX_STEPS; s++) {
   if (stuck >= 2 && s > 1) { const r = await sample(); if (r) { samples.push([{ t: 0, ...r }]); pageMoved.push(false); } break; }
 }
 virtualScroll = stack0.docHeight <= VH * 1.2 && wheelTravel > VH;
+threeTraj = { camera: null, objects: [] };
+{
+  const steps = threeSteps.filter(Boolean);
+  if (steps.length >= 4) {
+    const camPts = steps.map((st) => st.cam).filter(Boolean);
+    if (camPts.length >= 4) { const moved = Math.hypot(...camPts[0].map((v, i) => v - camPts[camPts.length - 1][i])); threeTraj.camera = { moves: moved > 0.05, start: camPts[0], end: camPts[camPts.length - 1], path_xz: pathShape(camPts.map((p) => [p[0], p[2]]), "world"), path_xy: pathShape(camPts.map((p) => [p[0], p[1]]), "world") }; }
+    const ids = [...new Set(steps.flatMap((st) => Object.keys(st.objs)))];
+    const per = ids.map((id) => {
+      const seq = steps.map((st) => st.objs[id]).filter((o) => o && o.vis);
+      if (seq.length < 4) return null;
+      const scr = pathShape(seq.map((o) => o.scr)), world = pathShape(seq.map((o) => [o.w[0], o.w[1]]), "world");
+      const path = scr && scr.shape !== "line/drift" ? scr : world && world.shape !== "line/drift" ? world : scr || world;
+      return path ? { id, name: seq[0].name, kind: seq[0].kind, steps_visible: seq.length, spin: Math.abs(seq[seq.length - 1].ry - seq[0].ry) > 0.2, path } : null;
+    }).filter(Boolean);
+    // many objects on the same kind of path (e.g. 30 photo planes on one loop) → one group line
+    const groups = new Map();
+    for (const o of per) { const k = `${o.kind}|${o.path.shape}|${Math.sign(o.path.sweep_deg)}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o); }
+    threeTraj.objects = [...groups.values()].map((g) => ({ count: g.length, kind: g[0].kind, names: [...new Set(g.map((o) => o.name).filter(Boolean))].slice(0, 5), shape: g[0].path.shape, unit: g[0].path.unit,
+      sweep_deg: Math.round(g.reduce((a, o) => a + o.path.sweep_deg, 0) / g.length), radius: +(g.reduce((a, o) => a + o.path.radius, 0) / g.length).toFixed(2), center: g[0].path.center, direction: g[0].path.direction, spin: g.some((o) => o.spin), example_points: g[0].path.points }))
+      .sort((a, b) => (a.shape === "line/drift") - (b.shape === "line/drift") || b.count - a.count).slice(0, 12);
+  }
+}
 // motion classification
 for (const c of cands) {
   const k = String(c.i);
@@ -335,7 +393,11 @@ for (const c of cands) {
   }
   if (changes >= 2) {
     const tx = finals.filter((_, s) => inView[s]).map((f) => parseMatrix(f[3]));
-    motion.scroll_linked.push({ el: c.tag, text: c.text, cls: c.cls, split_part: c.split || undefined, props: [...props], range: { tx: [Math.min(...tx.map((m) => m.tx)), Math.max(...tx.map((m) => m.tx))].map(Math.round), ty: [Math.min(...tx.map((m) => m.ty)), Math.max(...tx.map((m) => m.ty))].map(Math.round), scale: [Math.min(...tx.map((m) => m.s)), Math.max(...tx.map((m) => m.s))].map((v) => +v.toFixed(2)) } });
+    const seen = finals.map((f, s) => (inView[s] ? f : null));
+    const tPath = pathShape(seen.map((f) => { if (!f) return null; const m = parseMatrix(f[3]); return [m.tx, m.ty]; }));
+    const sPath = pathShape(seen.map((f) => (f ? [f[1], f[0] + f[2] / 2] : null)));
+    const path = [tPath, sPath].filter(Boolean).sort((a, b) => Math.abs(b.sweep_deg) - Math.abs(a.sweep_deg))[0];
+    motion.scroll_linked.push({ el: c.tag, text: c.text, cls: c.cls, split_part: c.split || undefined, path: path && path.shape !== "line/drift" ? path : undefined, props: [...props], range: { tx: [Math.min(...tx.map((m) => m.tx)), Math.max(...tx.map((m) => m.tx))].map(Math.round), ty: [Math.min(...tx.map((m) => m.ty)), Math.max(...tx.map((m) => m.ty))].map(Math.round), scale: [Math.min(...tx.map((m) => m.s)), Math.max(...tx.map((m) => m.s))].map((v) => +v.toFixed(2)) } });
     continue;
   }
   // reveal: within one step's time series the element animates, then stays put
@@ -614,7 +676,7 @@ const byKind = (k) => assetList.filter((a) => a.kind === k);
 save("stack.json", { stack: stackNow, gl_renderer: gl, phases_done: phasesDone, phases_cut: phasesCut, bundles, cursor, pointer, pages, pages_found: seen.size, transitions, transition, intro_ready_ms: introReadyMs, virtual_scroll: virtualScroll });
 save("motion.json", motion);
 save("hover.json", { hovers, cursor });
-save("three.json", three || { note: "no three.js scene observed (not three.js, or three < r127 without the devtools hook)" });
+save("three.json", three ? { ...three, trajectories: threeTraj } : { note: "no three.js scene observed (not three.js, or three < r127 without the devtools hook)" });
 save("assets.json", assetList);
 const fontMap = [];
 for (const r of fontRules) {
@@ -666,6 +728,13 @@ transitions.forEach((t, i) => L.push(`- PAGE TRANSITION ${i + 1} → ${t.to} (${
 L.push("", "## Pointer (mouse probe: 4 corners vs centre, ambient changes excluded)");
 if (!pointer.length) L.push("- not probed");
 pointer.forEach((p) => L.push(`- ${p.at}: reacts in [${p.reactive_cells.join(", ") || "none"}]${p.ambient_cells.length ? ` · animates by itself in [${p.ambient_cells.join(", ")}]` : ""}${p.moved_elements.length ? ` · elements that move with the mouse (parallax/magnetic): ${p.moved_elements.join("; ")}` : ""}`));
+L.push("", "## Motion PATHS (reproduce these exactly: shape, centre, radius, sweep, direction vs scroll; not a generic float)");
+{ const dom = motion.scroll_linked.filter((p) => p.path); const tr = threeTraj;
+  if (!dom.length && !tr.objects.some((o) => o.shape !== "line/drift") && !tr.camera?.moves) L.push("- no curved paths measured (everything moves in straight lines or not at all)");
+  dom.slice(0, 10).forEach((p) => L.push(`- DOM ${p.el} "${p.text.slice(0, 30)}" .${p.cls.split(" ")[0]}: ${p.path.shape}, sweep ${p.path.sweep_deg}° ${p.path.direction}, centre ${p.path.center} r ${p.path.radius}px (Δr ${p.path.radius_change}), points ${JSON.stringify(p.path.points).slice(0, 160)}`));
+  tr.objects.filter((o) => o.shape !== "line/drift").forEach((o) => L.push(`- WebGL ${o.count}× ${o.kind}${o.names.length ? ` (${o.names.join(", ")})` : ""}: ${o.shape}, sweep ~${o.sweep_deg}° ${o.direction}, centre ${o.center} r ~${o.radius}${o.unit === "px" ? "px on screen" : " world units"}${o.spin ? ", spins while travelling" : ""} · example ${JSON.stringify(o.example_points).slice(0, 140)}`));
+  if (tr.camera?.moves) L.push(`- CAMERA moves ${JSON.stringify(tr.camera.start)} → ${JSON.stringify(tr.camera.end)}${tr.camera.path_xz && tr.camera.path_xz.shape !== "line/drift" ? ` · ${tr.camera.path_xz.shape} in x/z, sweep ${tr.camera.path_xz.sweep_deg}°` : " (dolly/track)"}`);
+}
 L.push("", "## WebGL / three.js");
 if (three) {
   three.renderers.forEach((r) => L.push(`- renderer: toneMapping ${r.toneMapping}, exposure ${r.exposure}, ${r.colorSpace}, shadows ${r.shadows}, dpr ${r.pixelRatio}, ${r.info ? `${r.info.calls} draw calls, ${r.info.triangles} tris, ${r.info.programs} programs` : ""}`));

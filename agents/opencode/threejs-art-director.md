@@ -79,6 +79,7 @@ Output: ONLY this, ≤70 lines.
 ## Lighting          (key/fill/rim or HDRI (Poly Haven asset id), intensity ratios, direction relative to UI, tone mapping/exposure)
 ## Materials         (per surface: PBR values (base color, roughness, metalness, transmission/clearcoat), textures + asset id/license)
 ## Assets            (each: source · id/uid · license · target size · the exact `forge` command for asset-producer)
+## Trajectories      (from three.json → trajectories: which objects travel which path (loop/spiral/arc), centre, radius, sweep, direction, spin, and the camera path (dolly/orbit, start→end). Give it as code-ready parameters per object group.)
 ## Shaders           (RECREATE: teardown shader files to port + uniforms and how scroll/pointer drive them; DESIGN: technique + parameters)
 ## Environment/depth (background, fog, DOF, contact shadows, grain; none is a valid answer)
 ## Choreography      (scroll/interaction → camera or object moves: keyframes as progress 0→1 with positions/angles; idle motion or none)

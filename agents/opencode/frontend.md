@@ -49,8 +49,8 @@ You run a **ONE-SHOT** build. The user is not watching and does not want to be a
 The only exits are **STEP 9** (checkpoint) or a hard blocker you can't fix: missing credentials, or a site that blocks automation.
 
 **Priority order** (spend effort in this order):
-1. the **feel**: motion, transitions, intro, hover, cursor and pointer behaviour, pacing;
-2. **design assets**: real imagery, 3D, lighting;
+1. the **feel**: motion on its exact **paths** (the loop the photos travel, the orbit, the camera dolly), transitions, intro, hover, cursor and pointer behaviour, pacing;
+2. **3D and design assets**, as much as motion: every WebGL scene with the reference's models, lights, materials and ported shaders, plus real imagery;
 3. layout and typography;
 4. pixel accuracy;
 5. mobile.
@@ -96,9 +96,11 @@ Create a todo list with STEP 0–9 now, and tick each step as you finish it.
 |---|---|---|---|---|---|---|
 | I01 | / | hero | intro | counter 0→100 in 1.4 s, clip-path curtain up 1.0 s power4.inOut, then split-line title | teardown intro/t0700–t2600 | todo |
 
-- **`kind`** is one of: `section`, `layout`, `type`, `asset`, `intro`, `reveal`, `scroll` (pin/scrub/parallax), `hover`, `cursor`, `pointer`, `transition`, `3d`, `shader`, `page`.
+- **`kind`** is one of: `section`, `layout`, `type`, `asset`, `intro`, `reveal`, `path` (one per entry in teardown.md → Motion PATHS: shape, centre, radius, sweep, direction, scroll range, spin), `scroll` (pin/scrub/parallax), `hover`, `cursor`, `pointer`, `transition`, `3d`, `shader`, `page`.
 - **List EVERY one:** each section of each page, each intro beat, each reveal pattern, each pinned or scrubbed moment, each hover kind, the cursor, each pointer reaction, each page transition, each WebGL scene or shader, each asset and each page. An award site typically has **60–150 rows**; fewer than 40 means you haven't looked closely enough.
 - **Take values from the teardown and the specs:** eases, durations, scroll ranges and files.
+- **Path rows are mandatory:** every DOM/WebGL/camera path in teardown.md → *Motion PATHS* is a `path` row with its measured numbers. "Photos float in" is not a row; "8 photo planes travel a loop, counter-clockwise, r≈400 px on screen, one turn over the pinned 6 screens, spinning" is.
+- **Non-repetitive:** give each section a `reveal`/`scroll` row naming *its own* signature motion, as the reference does. If two sections would get the same generic reveal, look again at the teardown: the reference almost never repeats one.
 - **Pacing rows are mandatory:** one `scroll` row per page with its length in screens (teardown "N screens"), and one per pinned section with how many steps it stays pinned. The build must match each page's length within ±15%. Compressing a 49-screen scroll story into 19 screens removes the pacing: every pin and scrub then happens too fast.
 
 ## STEP 2 — assets (before any code)

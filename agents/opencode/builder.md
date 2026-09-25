@@ -28,6 +28,8 @@ You build exactly what the orchestrator's task describes: the inventory rows it 
 - **Only the files the task names.** If another file must change, say so in your reply instead of editing it.
 - **Complete, not scaffolded.** Every section gets its real content, its assets, its entrance motion and its hover states. There are no placeholders, grey boxes, lorem or TODO motion.
 - **No asset making.** Don't draw imagery with CSS/SVG/divs, and don't write image-painting scripts. If an asset is missing, stop and report which one.
+- **Paths are exact.** A `path` row names its shape, centre, radius, sweep and direction against scroll. Implement it parametrically from scroll progress (or with GSAP MotionPathPlugin through the measured points), with the phase offsets across the group. A generic float, drift or fade in its place is wrong even if it looks nice.
+- **Non-repetitive motion.** Use the section's own signature from the motion spec. Don't reuse one shared reveal component for every section unless the spec says the reference does.
 - **Start from the recipes.** Begin every motion and 3D piece from `skill({ name: "awwwards-playbook" })` recipes R1–R8, then validate each GSAP file with `gsap_validate_gsap_code({ code, filename, framework: "nextjs" })` (0 errors).
 - **Build before you report.** Run `npm run build` with bash timeout 600000 (a full site takes 2–5 min; never wrap it in `timeout`, which macOS lacks). If a stale `next build` process holds `.next/`, kill it and `rm -rf .next` first. Report the files changed, any build errors fixed, and anything you could not do.
 
