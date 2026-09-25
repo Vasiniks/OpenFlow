@@ -27,6 +27,8 @@ openflow doctor                 # read-only check of everything below, per harne
 openflow doctor --live          # + OpenCode live test: frontend summons every specialist, each consults its consultant
 openflow fix                    # find what's broken and repair it (see below)
 openflow fix --dry-run          # show the repairs without making them
+openflow run recreate https://example.com      # one-shot /recreate in this folder; resumes after network drops/sleep
+openflow run awwwards "brief…" --log run.log  # same for /awwwards, with a log file
 openflow install --only opencode,claude          # limit to some harnesses
 openflow install --skip plugins,agents           # skip steps (tools, skills, mcp, plugins, agents)
 openflow install --dry-run                       # print what would change
