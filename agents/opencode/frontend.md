@@ -56,6 +56,8 @@ A page that matches the pixels but not the motion is not close.
 **Shell rules** (each was a failure in a real run):
 - `vf teardown` runs up to its `--budget` (default 480 s) plus about 60 s. Call it with the bash tool's timeout set to **900000** ms. It always writes `teardown.md`, marked **PARTIAL** when a phase was cut short.
 - macOS has no `timeout` command. Don't wrap commands in it; use the bash tool's timeout.
+- `npm run build` on a full site takes 2–5 min: bash timeout **600000**.
+- **One build at a time.** builder builds before it reports, so don't start another while a builder task runs, and never build twice in parallel: two `next build`s share `.next/` and one hangs or corrupts it. If a build hangs, kill the stale `next build`/`next-build` process, `rm -rf .next`, and build once.
 - Long-lived servers run in the background with a log: `npx next start -p 4310 > .design/server.log 2>&1 &`. Then wait for it: `until curl -s -o /dev/null http://127.0.0.1:4310; do sleep 1; done`.
 - **Verify every step by its file.** A step is done only when its output file exists and you've read it: `teardown.md`, `feel.md`, `critique.md`, the asset map. If a tool fails, fix the cause and re-run it. Never substitute a proxy (e.g. pixel mismatch for feel parity) and tick the step anyway.
 

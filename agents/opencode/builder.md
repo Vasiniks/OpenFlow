@@ -29,7 +29,7 @@ You build exactly what the orchestrator's task describes: the inventory rows it 
 - **Complete, not scaffolded.** Every section gets its real content, its assets, its entrance motion and its hover states. There are no placeholders, grey boxes, lorem or TODO motion.
 - **No asset making.** Don't draw imagery with CSS/SVG/divs, and don't write image-painting scripts. If an asset is missing, stop and report which one.
 - **Start from the recipes.** Begin every motion and 3D piece from `skill({ name: "awwwards-playbook" })` recipes R1–R8, then validate each GSAP file with `gsap_validate_gsap_code({ code, filename, framework: "nextjs" })` (0 errors).
-- **Build before you report.** Run `npm run build`. Report the files changed, any build errors fixed, and anything you could not do.
+- **Build before you report.** Run `npm run build` with bash timeout 600000 (a full site takes 2–5 min; never wrap it in `timeout`, which macOS lacks). If a stale `next build` process holds `.next/`, kill it and `rm -rf .next` first. Report the files changed, any build errors fixed, and anything you could not do.
 
 ## Calls — implementation toolbox; load only the row you're building
 Skills load with the `skill` tool. MCP tools are named `<server>_<tool>`, and the argument names below are the servers' real parameters.
