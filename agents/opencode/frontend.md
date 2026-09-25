@@ -11,6 +11,9 @@ permission:
     "~/.agents/skills/**": allow
     "~/.openflow/**": allow
     "/dev/**": allow
+  edit:
+    "*": deny
+    ".design/**": allow
   task:
     "*": deny
     "reference-analyst": allow
@@ -24,6 +27,11 @@ permission:
     "asset-producer": allow
     "builder": allow
     "explore": allow
+tools:
+  "serena_replace_*": false
+  "serena_insert_*": false
+  "serena_rename_symbol": false
+  "serena_safe_delete_symbol": false
 ---
 
 # Frontend orchestrator: one-shot, autonomous, award-level
@@ -134,6 +142,8 @@ Save the reply verbatim to `.design/cur/round-N/critique.md`, and copy the row s
 ## STEP 7 — fix loop (autonomous; rounds 1–8)
 Repeat STEP 5 → 6 → 7:
 1. Group **all P0 and P1 findings** (not just P0) by file or section. Give each group to builder, and asset items to asset-producer. Rebuild until green.
+   - **You don't edit code.** Your edit permission covers `.design/**` only. Every source change goes through builder, including one-line fixes: it keeps your context for judging, not typing.
+   - **Change only what a finding names.** No refactors, class renames, token clean-ups or "while I'm here" edits. They cost rounds and move no row. The rows that decide the feel (fonts, intro, signature scroll moments, video, 3D) come first.
 2. **Exit** when all of these hold:
    - every inventory row is `done`, or `accepted` with a written reason;
    - RECREATE: `vf feel` parity ≥ 90%. DESIGN: every playbook §2 gate passes;

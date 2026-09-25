@@ -6,7 +6,7 @@ Generated from `agents/opencode/` (11 agents).
 
 | Agent | Mode | Edits code | Can consult | Shell | MCPs enabled | Prompt size |
 |---|---|---|---|---|---|---|
-| **frontend** | primary | yes (orchestrator / single writer) | reference-analyst, art-director, frontend-architect, interaction-designer, motion-designer, threejs-art-director, responsive-specialist, visual-critic, asset-producer, builder, explore | full | chrome-devtools, context7, serena, motion, shadcn, gsap | 13,968 chars |
+| **frontend** | primary | `.design/**` only (code goes through builder) | reference-analyst, art-director, frontend-architect, interaction-designer, motion-designer, threejs-art-director, responsive-specialist, visual-critic, asset-producer, builder, explore | full | chrome-devtools, context7, serena, motion, shadcn, gsap | 13,968 chars |
 | **reference-analyst** | subagent | no | — (leaf) | *visual-fidelity/scripts/vf capture*, *visual-fidelity/scripts/vf teardown*, ls * | playwright, chrome-devtools, headroom | 5,687 chars |
 | **art-director** | subagent | no | threejs-art-director, motion-designer, reference-analyst | python3 *ui-ux-pro-max/scripts/search.py*, *visual-fidelity/scripts/vf teardown*, *asset-forge/scripts/forge search*, *asset-forge/scripts/forge image* | playwright, blender | 9,206 chars |
 | **frontend-architect** | subagent | no | explore | ls *, cat package.json, cat components.json | chrome-devtools, context7, github, serena, shadcn, gsap | 6,046 chars |
@@ -25,7 +25,7 @@ Generated from `agents/opencode/` (11 agents).
 Frontend design & recreation orchestrator. Runs specialist analysis → implementation → measured render → critique → fix loops until the build converges on the reference or design spec. Use for any high-end frontend build, redesign, or reference recreation.
 
 - **Mode / temperature:** primary / 0.3
-- **Edits code:** yes (orchestrator / single writer) · **Shell:** full
+- **Edits code:** no (`.design/**` only; every source change goes through builder) · **Shell:** full
 - **MCPs:** on: chrome-devtools, context7, serena, motion, shadcn, gsap; off: —
 - **Skills loaded via `skill({ name })` (22):** asset-library, awwwards-playbook, baseline-ui, cinematic-gsap-lenis-motion-system, fixing-accessibility, fixing-metadata, fixing-motion-performance, frontend-ui-engineering, gsap-plugins, gsap-react, gsap-scrolltrigger, gsap-timeline, motion, shadcn, shader-dev, tailwind-design-system, threejs-scenes, vercel-composition-patterns, vercel-react-best-practices, web-perf, webapp-testing, webgl-3d-object
 - **MCP tools called by exact name (12):** `chrome-devtools_list_console_messages`, `chrome-devtools_list_network_requests`, `chrome-devtools_new_page`, `context7_query-docs`, `context7_resolve-library-id`, `gsap_create_production_pattern`, `gsap_generate_complete_setup`, `gsap_validate_gsap_code`, `motion_search-motion-docs`, `serena_find_symbol`, `shadcn_get_add_command_for_items`, `shadcn_search_items_in_registries`
