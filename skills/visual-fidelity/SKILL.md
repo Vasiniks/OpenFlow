@@ -26,8 +26,10 @@ $VF compare .design/ref .design/cur/iter-N --out .design/cur/iter-N/compare
 ## Teardown: reverse-engineer a site (run it FIRST on any reference; run it on your own build before calling it done)
 
 ```bash
-$VF teardown <url> --out .design/ref/teardown --pages 20     # whole site; finishes within --budget (default 480 s)
+$VF teardown <url> --out .design/ref/teardown --pages 20     # whole site; finishes within --budget (default 600 s)
 ```
+- **Coverage.** The motion map scales its steps with the page (up to 80, spread over the full length), so pins at 40 screens are measured too.
+- **Assets.** Anything the page loaded but the browser couldn't hand over (streamed video, large glb) is downloaded directly at the end. Agents don't need curl for reference files.
 - **Time budget.** Each phase gets a share of `--budget` and is cut short when that share is spent. Results are written after every phase, and a watchdog writes whatever exists 60 s past the budget.
 - **When a phase was cut,** the header says **PARTIAL** and names what's missing. Re-run with a bigger `--budget` or fewer `--pages`, into another folder.
 - **Shell timeout.** Give the command a shell timeout of at least `budget + 120 s`.

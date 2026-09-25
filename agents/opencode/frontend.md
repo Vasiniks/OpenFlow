@@ -54,7 +54,7 @@ A page that matches the pixels but not the motion is not close.
 `VF=~/.agents/skills/visual-fidelity/scripts/vf` · `F=~/.agents/skills/asset-forge/scripts/forge`
 
 **Shell rules** (each was a failure in a real run):
-- `vf teardown` runs up to its `--budget` (default 480 s) plus about 60 s. Call it with the bash tool's timeout set to **900000** ms. It always writes `teardown.md`, marked **PARTIAL** when a phase was cut short.
+- `vf teardown` runs up to its `--budget` (default 600 s) plus about 90 s. Call it with the bash tool's timeout set to **900000** ms. It always writes `teardown.md`, marked **PARTIAL** when a phase was cut short.
 - macOS has no `timeout` command. Don't wrap commands in it; use the bash tool's timeout.
 - `npm run build` on a full site takes 2–5 min: bash timeout **600000**.
 - **One build at a time.** builder builds before it reports, so don't start another while a builder task runs, and never build twice in parallel: two `next build`s share `.next/` and one hangs or corrupts it. If a build hangs, kill the stale `next build`/`next-build` process, `rm -rf .next`, and build once.

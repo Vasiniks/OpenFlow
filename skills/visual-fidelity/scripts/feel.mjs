@@ -17,7 +17,7 @@ const J = (d, f, def = {}) => { try { return JSON.parse(readFileSync(join(d, f),
 const R = { stack: J(refDir, "stack.json"), motion: J(refDir, "motion.json"), hover: J(refDir, "hover.json"), three: J(refDir, "three.json"), assets: J(refDir, "assets.json", []) };
 const C = { stack: J(curDir, "stack.json"), motion: J(curDir, "motion.json"), hover: J(curDir, "hover.json"), three: J(curDir, "three.json"), assets: J(curDir, "assets.json", []) };
 // No stack.json = the teardown never got past its first phase. Refuse rather than report a meaningless parity.
-for (const d of [refDir, curDir]) if (!existsSync(join(d, "stack.json"))) { console.error(`vf feel: ${d}/stack.json missing: that teardown did not finish its main pass. Re-run \`vf teardown\` (it writes results within --budget, default 480 s) and check its teardown.md.`); process.exit(3); }
+for (const d of [refDir, curDir]) if (!existsSync(join(d, "stack.json"))) { console.error(`vf feel: ${d}/stack.json missing: that teardown did not finish its main pass. Re-run \`vf teardown\` (it writes results within --budget, default 600 s) and check its teardown.md.`); process.exit(3); }
 const cut = [[refDir, R], [curDir, C]].filter(([, x]) => (x.stack.phases_cut || []).length).map(([d, x]) => `${d}: ${x.stack.phases_cut.join("; ")}`);
 
 // ------------------------------------------------------------------------------------------------ parity table

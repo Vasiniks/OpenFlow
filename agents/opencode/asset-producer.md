@@ -26,7 +26,7 @@ permission:
     "mkdir -p *": allow
     "cp *": allow
     "cp ~/.agents/skills/asset-forge/scripts/templates/*": allow
-    "curl -fsSL *": allow
+    "*curl -fsSL *": allow
     "file *": allow
     "cmp *": allow
     "shasum *": allow

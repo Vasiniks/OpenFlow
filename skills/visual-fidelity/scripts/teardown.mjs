@@ -22,12 +22,12 @@ const flag = (k) => args.includes(`--${k}`);
 if (!url || url.startsWith("--")) { console.error("usage: teardown <url> --out <dir> [--pages 12] [--budget 480] [--viewport 1440x900] [--no-video] [--no-assets] [--steps 28]"); process.exit(2); }
 const OUT = opt("out", "./teardown");
 const [VW, VH] = opt("viewport", "1440x900").split("x").map(Number);
-const MAX_PAGES = Number(opt("pages", "12")), MAX_STEPS = Number(opt("steps", "28"));
+const MAX_PAGES = Number(opt("pages", "12")), STEPS_OPT = opt("steps", null);
 const VIDEO = !flag("no-video"), ASSETS = !flag("no-assets");
 // Time budget (s). Each phase gets a share and is cut short when its share is spent. Results are written after
 // every phase, and a watchdog writes whatever exists if the run is still going 60 s past the budget.
 // The default fits inside a 10-minute agent shell timeout.
-const BUDGET_MS = Number(opt("budget", "480")) * 1000, T0 = Date.now();
+const BUDGET_MS = Number(opt("budget", "600")) * 1000, T0 = Date.now();
 const past = (share) => Date.now() - T0 > BUDGET_MS * share;
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 for (const d of ["intro", "steps", "states", "pages", "shaders", "assets"]) mkdirSync(join(OUT, d), { recursive: true });
@@ -78,7 +78,7 @@ function pageStack() {
   if (q("[data-framer-name],[data-framer-component-type]")) libs.framer = true;
   if (q(".swiper")) libs.swiper = true;
   if (w.Howler || w.Howl) libs.howler_sound = true;
-  const split = qa("h1,h2,h3,h4,p,a,span,div").filter((e) => e.children.length >= 4 && [...e.children].every((c) => /(^|[\s_-])(char|word|line|split)/i.test(c.className?.toString() || "") || c.textContent.trim().length <= 1)).length;
+  const split = qa("h1,h2,h3,h4,p,a,span,div").filter((e) => e.children.length >= 4 && [...e.children].every((c) => /(^|[\s_-])(char|word|line|split)/i.test(c.getAttribute?.("class") || "") || c.textContent.trim().length <= 1)).length;
   if (split) libs.split_text_blocks = split;
   const canvases = qa("canvas").map((c) => { const r = c.getBoundingClientRect(); return { ctx: c.__tdCtx || "none", w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top + scrollY), fixed: getComputedStyle(c).position === "fixed" }; });
   const videos = qa("video").map((v) => ({ src: (v.currentSrc || v.src || "").slice(0, 160), autoplay: v.autoplay, loop: v.loop, muted: v.muted, w: Math.round(v.getBoundingClientRect().width) }));
@@ -132,7 +132,7 @@ function tagCandidates(limit) {
     const splitChild = el.parentElement && el.parentElement.children.length >= 4 && el.textContent.trim().length <= 20 && /(char|word|line|split)/i.test((el.className || "").toString());
     if (!(media || heading || block || (splitChild && out.filter((o) => o.split).length < 60) || (text.length > 20 && area > 0.004))) continue;
     el.setAttribute("data-td", String(i));
-    out.push({ i, tag, split: !!splitChild, text: (el.getAttribute("aria-label") || el.textContent || el.getAttribute("alt") || "").replace(/\s+/g, " ").trim().slice(0, 48), cls: (el.className?.toString() || "").slice(0, 60) });
+    out.push({ i, tag, split: !!splitChild, text: (el.getAttribute("aria-label") || el.textContent || el.getAttribute("alt") || "").replace(/\s+/g, " ").trim().slice(0, 48), cls: (el.getAttribute?.("class") || "").slice(0, 60) });
     i++;
   }
   return out;
@@ -222,7 +222,7 @@ function watchNetwork(page) {
       if (!kind || assets.has(u)) return;
       const entry = { url: u, kind, type: ct.split(";")[0], bytes: len || undefined };
       assets.set(u, entry);
-      if (ASSETS && ["font", "model", "hdri", "rive", "json"].includes(kind) || (ASSETS && kind === "image" && (len > 60000))) {
+      if (ASSETS && ["font", "model", "hdri", "rive", "json"].includes(kind) || (ASSETS && kind === "image" && (len > 60000)) || (ASSETS && kind === "video" && len < 60e6)) {
         const buf = await res.body().catch(() => null);
         if (!buf) return;
         entry.bytes = buf.length;
@@ -272,14 +272,18 @@ const raf0 = await within(page.evaluate(() => window.__td?.raf || 0), 5000, 0); 
 rafPerSec = (await within(page.evaluate(() => window.__td?.raf || 0), 5000, 0)) - raf0;
 cands = (await within(page.evaluate(tagCandidates, 320), 30000)) || [];
 const samples = [];
-const stepPx = Math.round(VH * 0.5);
+// Cover the WHOLE page: step count and size scale with its length (a fixed 28 half-screen steps saw only the first
+// 14 screens of a 49-screen page, so most pins were never measured). Virtual scrollers keep half-screen steps.
+const longPage = stack0.docHeight > VH * 1.2;
+const MAX_STEPS = STEPS_OPT ? Number(STEPS_OPT) : longPage ? Math.min(80, Math.max(28, Math.ceil(stack0.docHeight / (VH * 0.6)))) : 28;
+const stepPx = longPage ? Math.max(Math.round(VH * 0.5), Math.round(stack0.docHeight / MAX_STEPS)) : Math.round(VH * 0.5);
 const sample = () => within(page.evaluate(sampleCandidates), 10000);
 let stuck = 0;
 const pageMoved = [true];  // pageMoved[s] = content moved between step s-1 and s
 for (let s = 0; s < MAX_STEPS; s++) {
-  if (past(0.4) && s >= 4) { phasesCut.push(`scroll motion map stopped at step ${s} of ${MAX_STEPS} (${Math.round(wheelTravel / VH)} screens); the rest of the page is only in the scroll sheets`); break; }
+  if (past(0.5) && s >= 4) { phasesCut.push(`scroll motion map stopped at step ${s} of ${MAX_STEPS} (${Math.round(wheelTravel / VH)} screens); the rest of the page is only in the scroll sheets`); break; }
   const series = [];
-  for (const t of [0, 250, 600, 1100]) { if (t) await sleep(t - (series.length ? series[series.length - 1].t : 0)); const r = await sample(); if (r) series.push({ t, ...r }); }
+  for (const t of [0, 300, 1000]) { if (t) await sleep(t - (series.length ? series[series.length - 1].t : 0)); const r = await sample(); if (r) series.push({ t, ...r }); }
   if (!series.length) { phasesCut.push(`page stopped answering at step ${s}`); break; }
   samples.push(series);
   await within(page.screenshot({ path: join(OUT, "steps", `s${String(s).padStart(2, "0")}.jpg`), quality: 62, type: "jpeg" }), 15000);
@@ -368,7 +372,7 @@ finalize();
 // hover map + custom cursor
 log("hover + cursor");
 await within(page.evaluate(() => window.scrollTo(0, 0)), 5000); await page.mouse.wheel(0, -99999); await sleep(1500);
-const hoverTargets = past(0.5) ? [] : await within(page.evaluate(() => {
+const hoverTargets = past(0.58) ? [] : await within(page.evaluate(() => {
   const out = [];
   for (const el of document.querySelectorAll("a,button,[role=button],[data-cursor],[class*=card],[class*=link],[class*=btn]")) {
     const r = el.getBoundingClientRect(); if (r.width < 20 || r.height < 12 || r.top < 0 || r.bottom > innerHeight) continue;
@@ -383,7 +387,7 @@ const snapHover = (i) => within(page.evaluate((i) => {
   return nodes.map((n) => { const cs = getComputedStyle(n); return [n.tagName.toLowerCase(), cs.transform, cs.opacity, cs.color, cs.backgroundColor, cs.clipPath, cs.filter, cs.textDecorationLine, cs.letterSpacing, cs.borderColor, cs.boxShadow.slice(0, 40), cs.width]; });
 }, i), 8000);
 for (const h of hoverTargets) {
-  if (past(0.52)) { phasesCut.push(`hover map stopped after ${hovers.length} of ${hoverTargets.length} targets`); break; }
+  if (past(0.61)) { phasesCut.push(`hover map stopped after ${hovers.length} of ${hoverTargets.length} targets`); break; }
   await page.mouse.move(5, VH - 5); await sleep(700);  // let the previous hover-out finish
   const a = await snapHover(h.i); if (!a) continue;
   await page.mouse.move(h.x, h.y, { steps: 6 }); await sleep(550);
@@ -403,7 +407,7 @@ for (const h of hoverTargets) {
   if (hovers.length === 4) await page.screenshot({ path: join(OUT, "states", "hover-example.jpg"), quality: 70, type: "jpeg" }).catch(() => {});
 }
 cursor = await (async () => {
-  const pos = async () => within(page.evaluate(() => [...document.querySelectorAll("body *")].filter((e) => { const cs = getComputedStyle(e); return cs.position === "fixed" && cs.pointerEvents === "none"; }).map((e) => { const r = e.getBoundingClientRect(); return { cls: (e.className?.toString() || e.tagName).slice(0, 50), x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), blend: getComputedStyle(e).mixBlendMode }; })), 8000, []);
+  const pos = async () => within(page.evaluate(() => [...document.querySelectorAll("body *")].filter((e) => { const cs = getComputedStyle(e); return cs.position === "fixed" && cs.pointerEvents === "none"; }).map((e) => { const r = e.getBoundingClientRect(); return { cls: (e.getAttribute?.("class") || e.tagName).slice(0, 50), x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), blend: getComputedStyle(e).mixBlendMode }; })), 8000, []);
   await page.mouse.move(200, 200, { steps: 5 }); await sleep(600); const p1 = await pos();
   await page.mouse.move(900, 600, { steps: 8 }); await sleep(600); const p2 = await pos();
   const moved = p2.filter((b) => { const a = p1.find((x) => x.cls === b.cls); return a && Math.hypot(a.x - b.x, a.y - b.y) > 200 && b.w < 400; });
@@ -423,7 +427,7 @@ const CELL = ["top-left", "top", "top-right", "left", "center", "right", "bottom
 phasesDone.push("hover + cursor");
 for (const [label, dy] of [["top", 0], ["mid-page", Math.round(wheelTravel / 2)]]) {
   if (label === "mid-page" && !wheelTravel) continue;
-  if (past(0.6)) { phasesCut.push(`pointer probe skipped at ${label}`); break; }
+  if (past(0.67)) { phasesCut.push(`pointer probe skipped at ${label}`); break; }
   await page.mouse.move(VW / 2, VH / 2); await page.mouse.wheel(0, -99999); await sleep(900);
   for (let k = 0, left = dy; left > 0 && k < 60; k++, left -= 200) { await page.mouse.wheel(0, Math.min(200, left)); await sleep(40); }
   await sleep(1400);
@@ -448,7 +452,7 @@ function byIdx(k) { const c = cands.find((x) => String(x.i) === k); return c ? `
 phasesDone.push("pointer probe");
 log("states");
 for (const sel of ["button[aria-expanded=false]", "[class*=burger]", "[class*=menu-toggle]", "[class*=menu] button", "[aria-label*=menu i]", "[role=tab]"]) {
-  if (past(0.64)) { phasesCut.push("menu/tab states"); break; }
+  if (past(0.7)) { phasesCut.push("menu/tab states"); break; }
   const el = await within(page.$(sel), 5000); if (!el || !(await el.isVisible().catch(() => false))) continue;
   const name = sel.replace(/[^a-z]/gi, "").slice(0, 20);
   await el.click({ timeout: 2000 }).catch(() => {});
@@ -465,7 +469,7 @@ finalize();
 
 // page transitions: click up to 3 different internal links and film each hand-off (and the way back)
 for (let n = 0; n < 3; n++) {
-  if (past(0.72)) { phasesCut.push(`page transitions stopped after ${n}`); break; }
+  if (past(0.77)) { phasesCut.push(`page transitions stopped after ${n}`); break; }
   const href = await within(page.evaluate(({ origin, done }) => { const a = [...document.querySelectorAll("header a[href], nav a[href], a[href]")].find((a) => a.href.startsWith(origin) && !done.includes(a.href.split("#")[0]) && a.href.split("#")[0] !== location.href.split("#")[0] && a.getBoundingClientRect().width > 0 && a.getBoundingClientRect().top >= 0 && a.getBoundingClientRect().top < innerHeight); if (!a) return null; document.querySelectorAll("[data-tdt]").forEach((e) => e.removeAttribute("data-tdt")); a.setAttribute("data-tdt", "1"); return a.href.split("#")[0]; }, { origin, done: transitions.map((t) => t.to) }), 8000);
   if (!href) break;
   await page.mouse.wheel(0, -99999); await sleep(600);
@@ -491,7 +495,7 @@ await page.mouse.wheel(0, -99999); await within(page.evaluate(() => window.scrol
   const every = Math.max(1, Math.round((VH * 0.7) / 60));
   mkdirSync(join(OUT, "progress"), { recursive: true });
   for (let y = 0, n = 0; y < total + VH && n < 900 && frames.length < 60; y += 60, n++) {
-    if (past(0.86)) { phasesCut.push(`continuous scroll stopped at ${Math.round((100 * y) / total)}% of the page`); break; }
+    if (past(0.88)) { phasesCut.push(`continuous scroll stopped at ${Math.round((100 * y) / total)}% of the page`); break; }
     if (n % every === 0) {
       const buf = await within(page.screenshot({ type: "png" }), 15000); if (!buf) continue;
       const png = PNG.sync.read(buf);
@@ -556,6 +560,25 @@ while (queue.length && pages.length < MAX_PAGES) {
   await c2.close();
 }
 await browser.close();
+// Files the page requested but whose body couldn't be read (streamed video, large models, requests cut off by navigation):
+// download them directly so the build can use the reference's own files (agents shouldn't need curl for this).
+if (ASSETS) {
+  const want = [...assets.values()].filter((a) => !a.saved && ["font", "model", "hdri", "rive", "video"].includes(a.kind) || (!a.saved && a.kind === "image" && (a.bytes || 0) > 60000));
+  let got = 0;
+  for (const a of want) {
+    if (Date.now() - T0 > BUDGET_MS + 30000) break;
+    try {
+      const r = await fetch(a.url, { headers: { "user-agent": UA, referer: url }, signal: AbortSignal.timeout(60000) });
+      if (!r.ok) continue;
+      const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > 60e6) continue;
+      const ext = extname(new URL(a.url).pathname).toLowerCase();
+      const stem = decodeURIComponent(new URL(a.url).pathname.split("/").filter(Boolean).slice(-2).join("-")).replace(/\.[^.]*$/, "").replace(/[^a-z0-9_-]+/gi, "-").slice(-48).replace(/^-+/, "");
+      const name = `${a.kind}-${stem ? `${stem}-` : ""}${createHash("sha1").update(a.url).digest("hex").slice(0, 8)}${ext}`;
+      writeFileSync(join(OUT, "assets", name), buf); a.saved = `assets/${name}`; a.bytes = buf.length; a.fetched_after = true; got++;
+    } catch {}
+  }
+  if (want.length) log(`downloaded ${got} of ${want.length} assets the page loaded but the browser couldn't hand over`);
+}
 if (pages.length) phasesDone.push(`crawl (${pages.length} pages)`);
 console.log(finalize());
 process.exit(0);
@@ -587,7 +610,7 @@ const L = [];
 const screens = (virtualScroll ? wheelTravel + VH : stackNow.docHeight) / VH;
 L.push(`# Teardown: ${url}`, "", `Title: ${stackNow.title} · viewport ${VW}×${VH} · ${screens.toFixed(1)} screens${virtualScroll ? " · VIRTUAL SCROLL (content moved by transforms inside a fixed wrapper, e.g. ScrollSmoother / custom)" : ""} · ${pages.length} other page(s) crawled`, "");
 L.push(`WebGL: ${browser.__gl === "gpu" ? "GPU" : "SOFTWARE (SwiftShader), so heavy WebGL scenes run slowly and motion timing may be distorted"} (${gl}) · ${Math.round((Date.now() - T0) / 1000)} s of a ${BUDGET_MS / 1000} s budget`);
-if (phasesCut.length) L.push(`**PARTIAL:** cut short by the time budget: ${phasesCut.join("; ")}. Re-run with a larger \`--budget\` (or fewer \`--pages\`) if a missing part matters.`);
+if (phasesCut.length) L.push(`**PARTIAL:** cut short by the time budget: ${phasesCut.join("; ")}. Re-run what was cut (bash timeout 1200000): \`vf teardown ${url} --out ${OUT.replace(/\/$/, "")}-2 --budget ${Math.round((BUDGET_MS / 1000) * 1.6)} --pages ${Math.max(1, MAX_PAGES - pages.length)}\`. Use both folders.`);
 L.push(`Phases completed: ${phasesDone.join(", ") || "intro only"}`, "");
 L.push("## Stack (runtime + bundle evidence)");
 L.push(`- runtime: ${JSON.stringify(stackNow.libs)}`);
@@ -629,7 +652,7 @@ if (three) {
   });
 } else L.push(`- no three.js scene observed${stackNow.canvases.some((c) => c.ctx.includes("webgl")) ? " — but a WebGL canvas exists: read shaders/custom-* (OGL / raw WebGL / Spline / other)" : ""}`);
 L.push(`- shaders captured: ${shaders.length} (${custom} custom → shaders/custom-*). Custom shaders ARE the look: port them, don't approximate.`);
-L.push("", "## Assets (network)", "assets.json maps every saved file to its source URL. Files keep the last two URL segments in their name (image-<dir>-<file>-<hash>.webp): use that to put the right photo in the right place.");
+L.push("", "## Assets (network)", `${assetList.filter((a) => !a.saved && a.kind !== "image").length ? `NOT saved (fetch from assets.json url): ${assetList.filter((a) => !a.saved && a.kind !== "image").map((a) => a.url.split("/").pop()).slice(0, 8).join(", ")}. ` : ""}assets.json maps every saved file to its source URL. Files keep the last two URL segments in their name (image-<dir>-<file>-<hash>.webp): use that to put the right photo in the right place.`);
 for (const k of ["font", "model", "hdri", "rive", "json", "video", "audio", "image"]) {
   const a = byKind(k); if (!a.length) continue;
   L.push(`- ${k} (${a.length}): ${a.sort((x, y) => (y.bytes || 0) - (x.bytes || 0)).slice(0, k === "image" ? 8 : 10).map((x) => `${x.saved || x.url.split("/").pop().slice(0, 50)}${x.bytes ? ` ${(x.bytes / 1024).toFixed(0)}KB` : ""}`).join(", ")}`);
