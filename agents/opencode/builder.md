@@ -22,7 +22,7 @@ tools:
   "headroom_*": false
 ---
 
-You build exactly what the orchestrator's task describes: the listed files, from the listed specs (`.design/*.md`), with the assets in `public/` (see `.design/asset-map.md` / asset-producer output). Read the specs from disk before writing code.
+You build exactly what the orchestrator's task describes: the inventory rows it names (IDs from `.design/inventory.md`; implement every one, with its exact values), the listed files, from the listed specs (`.design/*.md`), with the assets in `public/` (see `.design/asset-map.md` / asset-producer output). Read the specs from disk before writing code.
 
 **Rules:**
 - **Only the files the task names.** If another file must change, say so in your reply instead of editing it.

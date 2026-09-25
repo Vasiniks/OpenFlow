@@ -2,9 +2,9 @@
 # vf — visual-fidelity CLI. `vf capture <url> ...` | `vf compare <refDir> <curDir> ...`
 # Installs its three pinned deps next to itself on first run; uses the Playwright Chromium already cached.
 DIR="$(cd "$(dirname "$0")" && pwd)"
-[ -d "$DIR/node_modules/playwright-core" ] || npm install --prefix "$DIR" --no-audit --no-fund --silent >/dev/null 2>&1 || { echo "vf: npm install failed" >&2; exit 1; }
+[ -d "$DIR/node_modules/playwright-core" ] && [ -d "$DIR/node_modules/jpeg-js" ] || npm install --prefix "$DIR" --no-audit --no-fund --silent >/dev/null 2>&1 || { echo "vf: npm install failed" >&2; exit 1; }
 cmd="$1"; shift
 case "$cmd" in
-  capture|compare|track|teardown) exec node "$DIR/$cmd.mjs" "$@" ;;
-  *) echo "usage: vf capture <url> --out DIR [--viewports 1440x900,390x844] [--scroll 0,0.5] [--wait ms] [--reduced-motion] [--full]"; echo "       vf compare <refDir> <curDir> --out DIR"; echo "       vf track <curRoot>   (trend + regression guard)"; echo "       vf teardown <url> --out DIR [--pages 6] [--no-video] [--no-assets]   (reverse-engineer a reference)"; exit 2 ;;
+  capture|compare|track|teardown|feel) exec node "$DIR/$cmd.mjs" "$@" ;;
+  *) echo "usage: vf capture <url> --out DIR [--viewports 1440x900,390x844] [--scroll 0,0.5] [--wait ms] [--reduced-motion] [--full]"; echo "       vf compare <refDir> <curDir> --out DIR"; echo "       vf track <curRoot>   (trend + regression guard)"; echo "       vf teardown <url> --out DIR [--pages 12] [--no-video] [--no-assets]   (reverse-engineer a site)"; echo "       vf feel <refTeardown> <buildTeardown> --out DIR   (motion/interaction/3D parity + side-by-side sheets)"; exit 2 ;;
 esac

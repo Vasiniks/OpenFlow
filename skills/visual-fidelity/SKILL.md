@@ -24,7 +24,7 @@ $VF compare .design/ref .design/cur/iter-N --out .design/cur/iter-N/compare
 ## Teardown: reverse-engineer a site (run it FIRST on any reference; run it on your own build before calling it done)
 
 ```bash
-$VF teardown <url> --out .design/ref/teardown --pages 6      # ~1–5 min
+$VF teardown <url> --out .design/ref/teardown --pages 20     # whole site, ~3–10 min
 ```
 Read `teardown.md` first, then LOOK at the evidence it lists. It records:
 - **Intro:** frames at 0.3–7 s plus `intro.webm`; when the intro finished.
@@ -38,6 +38,20 @@ Read `teardown.md` first, then LOOK at the evidence it lists. It records:
 - **Menu/tab states and a page transition,** each as a frame sequence.
 - **Other routes** (screenshots per step) and the **real assets:** fonts, glb/gltf/ktx2/hdr, Lottie JSON, Rive, the largest images.
 
+- **Pointer probe:** the regions that react when the mouse moves (ambient animation excluded), and the elements that move with the mouse (parallax, magnetic).
+- **Up to 3 page transitions** filmed there and back.
+- **A breadth-first crawl of the whole site** (`--pages 12` by default; use 20 for recreations).
+- **`progress/p###.png`:** frames indexed by scroll progress.
+
+### Feel parity: `vf feel <refTeardown> <buildTeardown> --out DIR`
+Compares two teardowns mechanism by mechanism. It writes `feel.md`:
+- a table covering smooth scroll, GSAP-animated elements, intro timing, split text, reveals, scroll-linked, pins, easing vocabulary, durations, hover kinds, cursor, pointer reactivity, transitions, WebGL, lights, materials, custom shaders, fonts, images/video/models, and pages;
+- a **parity %**.
+
+It also writes **side-by-side sheets** (reference LEFT, build RIGHT): `feel-intro.png` (same ms after load), `feel-scroll-NN.png` (same scroll progress), `feel-transition.png` and `feel-states.png`.
+
+Pixel similarity can't see motion; this can. An old recreation that scored about 99% on pixels scored 33% here, because the WebGL, pins, transitions, pages and imagery were all missing.
+
 A teardown turns "it has some animation" into "12 split-line reveals at 1100 ms expo.out, 1 pinned horizontal track, ScrollTrigger `start:'top top' end:'bottom-=500px bottom' scrub:true`". Specs and critiques must quote it.
 
 ## Protocol
@@ -47,7 +61,7 @@ A teardown turns "it has some animation" into "12 split-line reveals at 1100 ms 
 3. **Look at the images, not just the numbers.** Read `side-by-side.png` for every label you critique. Numbers localise; eyes judge.
 4. **Scroll-driven sites.** Capture at the scroll fractions where sections settle (e.g. `0,0.15,0.35`). Don't use full-page shots of pinned pages: pin-spacers distort them.
 5. **Regression guard.** After every compare, run `$VF track .design/cur`. It ranks iterations by pixel mismatch (element impact breaks ties), marks the BEST, and exits 3 when the latest iteration regressed. On a regression, attribute it with `$VF compare .design/cur/<best> .design/cur/<latest>`: this build-vs-build diff shows exactly what your last change moved. Then revert or redo that change. Never stop on an iteration that isn't the best, and never blame animation noise for a regression without that diff proving the canvas changed.
-6. **Loop budget.** A maximum of 3 critique→fix iterations per viewport set. Stop early when pixel mismatch and the top-3 impact scores stop improving (<10% relative change), and report what remains.
+6. **Loop budget.** It's owned by the orchestrator (STEP 7: up to 8 rounds). Exit on inventory done + feel parity ≥ 90% + 0 P0, not on pixel plateaus. Pixel mismatch is a secondary trend line.
 7. **Fix causes, not metrics.** Never make a wrong asset "fit" with tracking, scaling or transforms. If same-size text is wider or narrower than the reference, the font *file* is wrong (a different cut, version or width). Fetch the reference's actual file, whose URL is in reference-spec, via network requests. Letter-spacing deltas on matched text are scored as defects for this reason.
 8. **Evidence format** (every issue): `OBSERVATION` (a number from compare.md or a coordinate on the side-by-side) → `INTERPRETATION` (why it matters visually) → `RECOMMENDATION` (a concrete change: property, value, element).
 

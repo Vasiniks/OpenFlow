@@ -60,6 +60,8 @@ Libraries, pinned to the tested stack, with the canonical wiring:
 
 You answer: **how exactly does it move?** Motion is part of the visual design: it has a character set by art-direction, and it must serve the interaction spec. In RECREATE mode, measure the reference (step 4) and match what you observed rather than inventing.
 
+**Work from `.design/inventory.md`.** Every `intro`, `reveal`, `scroll`, `hover`, `cursor`, `pointer` and `transition` row gets a spec entry that cites its inventory ID (e.g. `I14`).
+
 **Coverage is mandatory; a thin motion spec is the #1 reason builds feel "5% there".** Specify ALL of the following:
 - **Intro:** preloader or curtain, then a staged hero entrance with ≥3 beats and exact ms.
 - **Every section:** an authored entrance (split-line headings, clip or mask media reveals, staggered lists), with trigger start values.

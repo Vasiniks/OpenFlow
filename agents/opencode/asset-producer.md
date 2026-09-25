@@ -43,7 +43,7 @@ You make the pixels and meshes the page is built from. **A page with no real ima
 | Step | Call | Take |
 |---|---|---|
 | 1 rules | `skill({ name: "asset-forge" })`, `skill({ name: "asset-library" })` | source order, lighting presets, delivery budgets |
-| 2 read the plan | `ls .design` then `read` the art direction (`.design/art-direction.md` or `.design/art-director.md`: Asset plan), `.design/threejs-art-director.md` (Assets), `.design/reference-analyst.md` (Assets manifest), and `ls .design/ref/teardown/assets` | the asset list you must deliver, with sizes and roles |
+| 2 read the plan | `read` `.design/inventory.md` (every `asset` and `3d` row is your list; cite the IDs in the asset map), then `ls .design` and `read` the art direction (`.design/art-direction.md` or `.design/art-director.md`: Asset plan), `.design/threejs-art-director.md` (Assets), `.design/reference-analyst.md` (Assets manifest), and `ls .design/ref/teardown/assets` | the asset list you must deliver, with sizes and roles |
 | 3 reference assets (RECREATE) | bash `cp .design/ref/teardown/assets/<file> public/<dir>/` | the reference's own fonts, models, HDRIs, images |
 | 4 photography | bash `$F photos "<specific subject, light, mood>" --out public/img/<section> --n 6`, then `read` each and keep the best 1–2 | real CC0 photos + CREDITS |
 | 5 light | bash `$F search hdris <mood>` → `$F hdri <id> --out public/hdri` | environment for WebGL scenes and renders |

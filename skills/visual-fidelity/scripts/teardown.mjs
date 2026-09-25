@@ -22,7 +22,7 @@ const flag = (k) => args.includes(`--${k}`);
 if (!url || url.startsWith("--")) { console.error("usage: teardown <url> --out <dir> [--pages 6] [--viewport 1440x900] [--no-video] [--no-assets] [--steps 28]"); process.exit(2); }
 const OUT = opt("out", "./teardown");
 const [VW, VH] = opt("viewport", "1440x900").split("x").map(Number);
-const MAX_PAGES = Number(opt("pages", "6")), MAX_STEPS = Number(opt("steps", "28"));
+const MAX_PAGES = Number(opt("pages", "12")), MAX_STEPS = Number(opt("steps", "28"));
 const VIDEO = !flag("no-video"), ASSETS = !flag("no-assets");
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 for (const d of ["intro", "steps", "states", "pages", "shaders", "assets"]) mkdirSync(join(OUT, d), { recursive: true });
@@ -372,6 +372,39 @@ const cursor = await (async () => {
   return moved.length ? { custom_cursor: true, elements: moved.slice(0, 3) } : { custom_cursor: false, css_cursor: stack0.bodyCursor };
 })();
 
+// pointer probe: does the page react to the mouse? (WebGL/shader distortion, mouse parallax, magnetic elements)
+log("pointer probe");
+const small = (png, w = 240) => { const h = Math.round((w * png.height) / png.width), o = new Uint8Array(w * h * 3), sx = png.width / w, sy = png.height / h;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const si = (Math.floor(y * sy) * png.width + Math.floor(x * sx)) * 4, di = (y * w + x) * 3; o[di] = png.data[si]; o[di + 1] = png.data[si + 1]; o[di + 2] = png.data[si + 2]; }
+  return { w, h, d: o }; };
+const cellDiff = (a, b) => { // % of pixels changed per 3×3 cell
+  const out = []; for (let cy = 0; cy < 3; cy++) for (let cx = 0; cx < 3; cx++) { let n = 0, t = 0;
+    for (let y = Math.floor((cy * a.h) / 3); y < Math.floor(((cy + 1) * a.h) / 3); y++) for (let x = Math.floor((cx * a.w) / 3); x < Math.floor(((cx + 1) * a.w) / 3); x++) { const i = (y * a.w + x) * 3; t++; if (Math.abs(a.d[i] - b.d[i]) + Math.abs(a.d[i + 1] - b.d[i + 1]) + Math.abs(a.d[i + 2] - b.d[i + 2]) > 30) n++; }
+    out.push(+((100 * n) / t).toFixed(1)); } return out; };
+const CELL = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"];
+const pointer = [];
+for (const [label, dy] of [["top", 0], ["mid-page", Math.round(wheelTravel / 2)]]) {
+  if (label === "mid-page" && !wheelTravel) continue;
+  await page.mouse.move(VW / 2, VH / 2); await page.mouse.wheel(0, -99999); await sleep(900);
+  for (let k = 0, left = dy; left > 0 && k < 60; k++, left -= 200) { await page.mouse.wheel(0, Math.min(200, left)); await sleep(40); }
+  await sleep(1400);
+  const snapT = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll("[data-td]")].map((e) => [e.getAttribute("data-td"), getComputedStyle(e).transform])));
+  await page.mouse.move(VW / 2, VH / 2, { steps: 4 }); await sleep(900);
+  const base = small(PNG.sync.read(await page.screenshot({ type: "png" }))), baseT = await snapT();
+  await sleep(700);  // ambient baseline: what changes with the mouse held still (idle WebGL, marquees, video)
+  const ambient = new Set(cellDiff(base, small(PNG.sync.read(await page.screenshot({ type: "png" })))).map((p, i) => (p > 2 ? CELL[i] : null)).filter(Boolean));
+  const res = { at: label, reactive_cells: new Set(), moved_elements: new Set(), ambient_cells: [...ambient] };
+  for (const [fx, fy] of [[0.12, 0.18], [0.88, 0.18], [0.12, 0.82], [0.88, 0.82]]) {
+    await page.mouse.move(VW * fx, VH * fy, { steps: 10 }); await sleep(700);
+    const shot = PNG.sync.read(await page.screenshot({ type: "png" }));
+    if (fx === 0.88 && fy === 0.82) writeFileSync(join(OUT, "states", `pointer-${label}-corner.png`), PNG.sync.write(shot));
+    cellDiff(base, small(shot)).forEach((p, i) => { if (p > 2 && !ambient.has(CELL[i])) res.reactive_cells.add(CELL[i]); });
+    const t = await snapT(); for (const k of Object.keys(t)) if (t[k] !== baseT[k] && byIdx(k)) res.moved_elements.add(byIdx(k));
+  }
+  pointer.push({ at: label, reactive_cells: [...res.reactive_cells], ambient_cells: res.ambient_cells, moved_elements: [...res.moved_elements].slice(0, 8) });
+}
+function byIdx(k) { const c = cands.find((x) => String(x.i) === k); return c ? `${c.tag} "${c.text.slice(0, 24)}" .${(c.cls || "").split(" ")[0]}` : null; }
+
 // menu / tabs / other states
 log("states");
 const states = [];
@@ -390,18 +423,22 @@ const three = await page.evaluate(threeScene).catch(() => null);
 const shaders = await page.evaluate(() => window.__td?.shaders || []);
 const stack = { ...stack0, ...(await page.evaluate(pageStack)), raf_calls_per_sec: rafPerSec };
 
-// page transition: click the first internal nav link and film the hand-off
-const transition = await (async () => {
-  const href = await page.evaluate((origin) => { const a = [...document.querySelectorAll("header a[href], nav a[href], a[href]")].find((a) => a.href.startsWith(origin) && a.href.split("#")[0] !== location.href.split("#")[0] && a.getBoundingClientRect().width > 0 && a.getBoundingClientRect().top >= 0 && a.getBoundingClientRect().top < innerHeight); if (!a) return null; a.setAttribute("data-tdt", "1"); return a.href; }, origin);
-  if (!href) return null;
+// page transitions: click up to 3 different internal links and film each hand-off (and the way back)
+const transitions = [];
+for (let n = 0; n < 3; n++) {
+  const href = await page.evaluate(({ origin, done }) => { const a = [...document.querySelectorAll("header a[href], nav a[href], a[href]")].find((a) => a.href.startsWith(origin) && !done.includes(a.href.split("#")[0]) && a.href.split("#")[0] !== location.href.split("#")[0] && a.getBoundingClientRect().width > 0 && a.getBoundingClientRect().top >= 0 && a.getBoundingClientRect().top < innerHeight); if (!a) return null; document.querySelectorAll("[data-tdt]").forEach((e) => e.removeAttribute("data-tdt")); a.setAttribute("data-tdt", "1"); return a.href.split("#")[0]; }, { origin, done: transitions.map((t) => t.to) });
+  if (!href) break;
   await page.mouse.wheel(0, -99999); await sleep(600);
   const t0 = Date.now(); await page.click("[data-tdt]", { timeout: 3000, noWaitAfter: true }).catch(() => {});
   const shots = [];
-  for (const t of [100, 300, 600, 1000, 1600]) { await sleep(Math.max(0, t - (Date.now() - t0))); const f = `states/transition-${t}ms.jpg`; await page.screenshot({ path: join(OUT, f), quality: 65, type: "jpeg" }).catch(() => {}); shots.push(f); }
+  for (const t of [100, 300, 600, 1000, 1600]) { await sleep(Math.max(0, t - (Date.now() - t0))); const f = `states/transition${n + 1}-${t}ms.jpg`; await page.screenshot({ path: join(OUT, f), quality: 65, type: "jpeg" }).catch(() => {}); shots.push(f); }
   const spa = await page.evaluate(() => !!window.__td);  // hooks survive = client-side navigation (SPA transition), not a full reload
-  await page.goBack({ timeout: 15000 }).catch(() => {}); await sleep(2500);
-  return { to: href, client_side: spa, frames: shots };
-})();
+  const t1 = Date.now(); await page.goBack({ timeout: 15000 }).catch(() => {});
+  const back = []; for (const t of [150, 600]) { await sleep(Math.max(0, t - (Date.now() - t1))); const f = `states/transition${n + 1}-back-${t}ms.jpg`; await page.screenshot({ path: join(OUT, f), quality: 60, type: "jpeg" }).catch(() => {}); back.push(f); }
+  await sleep(2500);
+  transitions.push({ to: href, client_side: spa, frames: shots, back });
+}
+const transition = transitions[0] || null;
 
 // links for other pages
 const links = await page.evaluate((origin) => [...new Set([...document.querySelectorAll("a[href]")].map((a) => a.href.split("#")[0]).filter((h) => h.startsWith(origin) && !/\.(pdf|jpg|png|zip|mp4)$/i.test(h)))], origin);
@@ -413,8 +450,17 @@ const frames = [];
 {
   const total = Math.max(await page.evaluate(() => document.documentElement.scrollHeight), wheelTravel + VH);  // virtual scrollers: use measured travel
   const every = Math.max(1, Math.round((VH * 0.7) / 60));
+  mkdirSync(join(OUT, "progress"), { recursive: true });
   for (let y = 0, n = 0; y < total + VH && n < 900 && frames.length < 60; y += 60, n++) {
-    if (n % every === 0) frames.push(PNG.sync.read(await page.screenshot({ type: "png" })));
+    if (n % every === 0) {
+      const png = PNG.sync.read(await page.screenshot({ type: "png" }));
+      frames.push(png);
+      // progress-indexed copy (720 px) so a build can be compared with the reference at the same point of the scroll
+      const pct = String(Math.min(100, Math.round((100 * y) / Math.max(1, total - VH)))).padStart(3, "0");
+      const w = 720, h = Math.round((w * png.height) / png.width), o = new PNG({ width: w, height: h }), sx = png.width / w, sy = png.height / h;
+      for (let yy = 0; yy < h; yy++) for (let x = 0; x < w; x++) { const si = (Math.floor(yy * sy) * png.width + Math.floor(x * sx)) * 4, di = (yy * w + x) * 4; o.data[di] = png.data[si]; o.data[di + 1] = png.data[si + 1]; o.data[di + 2] = png.data[si + 2]; o.data[di + 3] = 255; }
+      writeFileSync(join(OUT, "progress", `p${pct}.png`), PNG.sync.write(o));
+    }
     await page.mouse.wheel(0, 60); await sleep(45);
   }
 }
@@ -436,7 +482,12 @@ await ctx.close();
 
 // ---- 3. other pages (lighter pass: screenshots per step + stack)
 const pages = [];
-for (const link of links.filter((l) => l.replace(/\/$/, "") !== url.replace(/\/$/, "")).slice(0, MAX_PAGES)) {
+// breadth-first crawl of the whole site: every page's own links join the queue (up to --pages)
+const norm = (u) => u.split("#")[0].split("?")[0].replace(/\/$/, "");
+const seen = new Set([norm(url)]), queue = [];
+for (const l of links) if (!seen.has(norm(l))) { seen.add(norm(l)); queue.push(l); }
+while (queue.length && pages.length < MAX_PAGES) {
+  const link = queue.shift();
   log(`page ${link}`);
   const c2 = await browser.newContext(ctxOpts(false)); await c2.addInitScript(INIT);
   const p2 = await c2.newPage(); watchNetwork(p2);
@@ -456,6 +507,8 @@ for (const link of links.filter((l) => l.replace(/\/$/, "") !== url.replace(/\/$
       await sleep(900);
     }
     pages.push({ url: link, slug, title: st.title, docHeight: st.docHeight, libs: st.libs, canvases: st.canvases.length, screenshots: n + 1 });
+    const more = await p2.evaluate((origin) => [...document.querySelectorAll("a[href]")].map((a) => a.href.split("#")[0]).filter((h) => h.startsWith(origin) && !/\.(pdf|jpg|png|zip|mp4)$/i.test(h)), origin).catch(() => []);
+    for (const l of more) if (!seen.has(norm(l))) { seen.add(norm(l)); queue.push(l); }
     const sh = await p2.evaluate(() => window.__td?.shaders || []); for (const s of sh) if (!shaders.includes(s)) shaders.push(s);
   } catch (e) { pages.push({ url: link, error: e.message.slice(0, 120) }); }
   await c2.close();
@@ -474,7 +527,7 @@ shaders.forEach((s, n) => {
 });
 const assetList = [...assets.values()];
 const byKind = (k) => assetList.filter((a) => a.kind === k);
-save("stack.json", { stack, bundles, cursor, pages, transition, intro_ready_ms: introReadyMs, virtual_scroll: virtualScroll });
+save("stack.json", { stack, bundles, cursor, pointer, pages, pages_found: seen.size, transitions, transition, intro_ready_ms: introReadyMs, virtual_scroll: virtualScroll });
 save("motion.json", motion);
 save("hover.json", { hovers, cursor });
 save("three.json", three || { note: "no three.js scene observed (not three.js, or three < r127 without the devtools hook)" });
@@ -508,7 +561,11 @@ L.push("", "## Hover & cursor");
 L.push(`- cursor: ${cursor.custom_cursor ? `CUSTOM ${JSON.stringify(cursor.elements[0])}` : `native (${cursor.css_cursor})`}`);
 hovers.slice(0, 12).forEach((h) => L.push(`- ${h.el} "${h.text}": ${h.changes.join(" | ")}`));
 L.push("", "## States", ...(states.length ? states.map((s) => `- ${s.trigger}: ${s.frames.join(", ")}`) : ["- no menu/tab toggles found"]));
-L.push(transition ? `- PAGE TRANSITION → ${transition.to} (${transition.client_side ? "client-side, SPA-style: look for barba/taxi/View Transitions/router + GSAP" : "full page load"}): ${transition.frames.join(", ")}` : "- no internal link to test a page transition");
+if (!transitions.length) L.push("- no internal link to test a page transition");
+transitions.forEach((t, i) => L.push(`- PAGE TRANSITION ${i + 1} → ${t.to} (${t.client_side ? "client-side, SPA-style: look for barba/taxi/View Transitions/router + GSAP" : "full page load"}): ${t.frames.join(", ")} · back: ${t.back.join(", ")}`));
+L.push("", "## Pointer (mouse probe: 4 corners vs centre, ambient changes excluded)");
+if (!pointer.length) L.push("- not probed");
+pointer.forEach((p) => L.push(`- ${p.at}: reacts in [${p.reactive_cells.join(", ") || "none"}]${p.ambient_cells.length ? ` · animates by itself in [${p.ambient_cells.join(", ")}]` : ""}${p.moved_elements.length ? ` · elements that move with the mouse (parallax/magnetic): ${p.moved_elements.join("; ")}` : ""}`));
 L.push("", "## WebGL / three.js");
 if (three) {
   three.renderers.forEach((r) => L.push(`- renderer: toneMapping ${r.toneMapping}, exposure ${r.exposure}, ${r.colorSpace}, shadows ${r.shadows}, dpr ${r.pixelRatio}, ${r.info ? `${r.info.calls} draw calls, ${r.info.triangles} tris, ${r.info.programs} programs` : ""}`));
@@ -525,7 +582,7 @@ for (const k of ["font", "model", "hdri", "rive", "json", "video", "audio", "ima
   const a = byKind(k); if (!a.length) continue;
   L.push(`- ${k} (${a.length}): ${a.sort((x, y) => (y.bytes || 0) - (x.bytes || 0)).slice(0, k === "image" ? 8 : 10).map((x) => `${x.saved || x.url.split("/").pop().slice(0, 50)}${x.bytes ? ` ${(x.bytes / 1024).toFixed(0)}KB` : ""}`).join(", ")}`);
 }
-L.push("", "## Pages", ...pages.map((p) => p.error ? `- ${p.url}: ERROR ${p.error}` : `- ${p.url} → pages/${p.slug}/s*.jpg (${p.screenshots} shots, ${(p.docHeight / VH).toFixed(1)} screens${p.canvases ? `, ${p.canvases} canvas` : ""})`));
-L.push("", "## Evidence to LOOK at (in this order)", "1. intro/t*.jpg (the first 7 seconds)", `2. scroll-sheet-*.png (${frames.length} frames of one continuous scroll, 5×4 per sheet, read left→right, top→bottom)`, "3. steps/s*.jpg for exact frames per half-screen", "4. states/*.jpg (menu, hover)", "5. pages/*/s*.jpg");
+L.push("", `## Pages (${pages.length} crawled of ${seen.size} internal URLs found)`, ...pages.map((p) => p.error ? `- ${p.url}: ERROR ${p.error}` : `- ${p.url} → pages/${p.slug}/s*.jpg (${p.screenshots} shots, ${(p.docHeight / VH).toFixed(1)} screens${p.canvases ? `, ${p.canvases} canvas` : ""})`));
+L.push("", "## Evidence to LOOK at (in this order)", "1. intro/t*.jpg (the first 7 seconds)", `2. scroll-sheet-*.png (${frames.length} frames of one continuous scroll, 5×4 per sheet, read left→right, top→bottom)`, "3. steps/s*.jpg for exact frames per half-screen", "4. states/*.jpg (menu, hover, pointer, every transition)", "5. pages/*/s*.jpg", "6. progress/p*.png: frames by scroll progress (0–100%), used by `vf feel` to pair reference and build");
 save("teardown.md", L.join("\n"));
 console.log(L.join("\n"));
