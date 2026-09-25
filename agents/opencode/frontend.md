@@ -53,6 +53,12 @@ A page that matches the pixels but not the motion is not close.
 
 `VF=~/.agents/skills/visual-fidelity/scripts/vf` · `F=~/.agents/skills/asset-forge/scripts/forge`
 
+**Shell rules** (each was a failure in a real run):
+- `vf teardown` runs up to its `--budget` (default 480 s) plus about 60 s. Call it with the bash tool's timeout set to **900000** ms. It always writes `teardown.md`, marked **PARTIAL** when a phase was cut short.
+- macOS has no `timeout` command. Don't wrap commands in it; use the bash tool's timeout.
+- Long-lived servers run in the background with a log: `npx next start -p 4310 > .design/server.log 2>&1 &`. Then wait for it: `until curl -s -o /dev/null http://127.0.0.1:4310; do sleep 1; done`.
+- **Verify every step by its file.** A step is done only when its output file exists and you've read it: `teardown.md`, `feel.md`, `critique.md`, the asset map. If a tool fails, fix the cause and re-run it. Never substitute a proxy (e.g. pixel mismatch for feel parity) and tick the step anyway.
+
 Create a todo list with STEP 0–9 now, and tick each step as you finish it.
 
 ## STEP 0 — setup
@@ -67,7 +73,9 @@ Create a todo list with STEP 0–9 now, and tick each step as you finish it.
 
 ## STEP 1 — understand the target
 **RECREATE / HYBRID:**
-1. Run `$VF teardown <url> --out .design/ref/teardown --pages 20`. This covers the whole site: every page, intro, motion map, hovers, pointer probe, transitions, 3D, shaders and assets.
+1. Run `$VF teardown <url> --out .design/ref/teardown --pages 20` (bash timeout 900000). This covers the whole site: every page, intro, motion map, hovers, pointer probe, transitions, 3D, shaders and assets. Then `read` `.design/ref/teardown/teardown.md`.
+   - If it says **PARTIAL**, re-run what was cut into a second folder, e.g. `--pages 10 --budget 600 --out .design/ref/teardown-2`.
+   - If its WebGL line says **SOFTWARE**, treat motion timings on WebGL-heavy pages as approximate.
 2. Call `task({ subagent_type: "reference-analyst", … })`: "Superprompt spec of <url> from `.design/ref/teardown`. Explore EVERY page and every interactive element with the mouse. Save to `.design/reference-analyst.md`."
 
 **DESIGN:** call `task({ subagent_type: "art-director", … })` (concept, measured references, section plan, asset plan). Save it to `.design/art-direction.md`.
@@ -81,6 +89,7 @@ Create a todo list with STEP 0–9 now, and tick each step as you finish it.
 - **`kind`** is one of: `section`, `layout`, `type`, `asset`, `intro`, `reveal`, `scroll` (pin/scrub/parallax), `hover`, `cursor`, `pointer`, `transition`, `3d`, `shader`, `page`.
 - **List EVERY one:** each section of each page, each intro beat, each reveal pattern, each pinned or scrubbed moment, each hover kind, the cursor, each pointer reaction, each page transition, each WebGL scene or shader, each asset and each page. An award site typically has **60–150 rows**; fewer than 40 means you haven't looked closely enough.
 - **Take values from the teardown and the specs:** eases, durations, scroll ranges and files.
+- **Pacing rows are mandatory:** one `scroll` row per page with its length in screens (teardown "N screens"), and one per pinned section with how many steps it stays pinned. The build must match each page's length within ±15%. Compressing a 49-screen scroll story into 19 screens removes the pacing: every pin and scrub then happens too fast.
 
 ## STEP 2 — assets (before any code)
 Call `task({ subagent_type: "asset-producer", … })` with every `asset` and `3d` row. It copies the reference's own files from `.design/ref/teardown/assets/` first, then uses Blender and CC0 sources for the rest, and writes `.design/asset-map.md`.
@@ -103,14 +112,16 @@ Work page by page, and section by section within each page. For each section, ca
 
 Then build the **global layer**: smooth scroll, intro/preloader, page transitions, cursor, hover system, pointer reactions and the 3D scene.
 
+- **Every builder prompt for a scroll section includes its pacing rows** (pin length in px or vh, scrub range).
 - **After every builder task,** run `npm run build`. If it fails, send the exact error back to builder and repeat until it's green. Never report a red build to the user.
 - **Mark rows** `built` in the inventory as you go. All pages and sections must exist before STEP 5.
 
 ## STEP 5 — measure (each round N)
-1. Production server: `npm run build && npx next start -p 4310` (restart it after each build).
+1. Production server: `npm run build`, then (re)start `npx next start -p 4310 > .design/server.log 2>&1 &` and wait until it answers.
 2. `$VF capture http://127.0.0.1:4310/<route> --out .design/cur/round-N --viewports 1440x900 --scroll 0,0.25,0.5,0.75,1`
 3. `$VF teardown http://127.0.0.1:4310/<route> --out .design/cur/round-N/teardown --pages 20`
 4. RECREATE: `$VF feel .design/ref/teardown .design/cur/round-N/teardown --out .design/cur/round-N/feel`, then `$VF compare .design/ref .design/cur/round-N --out .design/cur/round-N/compare` (secondary).
+5. `read` `feel.md`. STEP 5 is **not done** until `.design/cur/round-N/feel/feel.md` exists. If `vf feel` refuses because a teardown is incomplete, re-run that teardown; don't estimate parity yourself.
 
 ## STEP 6 — critique (each round N)
 Call `task({ subagent_type: "visual-critic", … })`: "Round N. Inventory `.design/inventory.md`, feel `.design/cur/round-N/feel/feel.md` plus its sheets, teardown `.design/cur/round-N/teardown/teardown.md`, captures `.design/cur/round-N`. Judge broad first, then motion, then details. Return a status for EVERY inventory row, plus P0/P1."

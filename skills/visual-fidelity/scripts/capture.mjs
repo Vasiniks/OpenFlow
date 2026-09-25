@@ -3,7 +3,7 @@
 // Usage: vf capture <url> --out <dir> [--viewports 1440x900,390x844] [--scroll 0,0.5] [--wait 1500]
 //                     [--reduced-motion] [--full]
 // Output per viewport+scroll: <label>.png + <label>.json (salient elements in px AND vw/vh units).
-import { chromium } from "playwright-core";
+import { launch } from "./browser.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -70,7 +70,7 @@ function extract() {
   };
 }
 
-const browser = await chromium.launch({ args: ["--use-angle=metal", "--enable-gpu", "--hide-scrollbars"] });
+const browser = await launch(["--hide-scrollbars"]);
 const summary = [];
 for (const [w, h] of viewports) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1,
@@ -79,7 +79,8 @@ for (const [w, h] of viewports) {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().slice(0, 160)); });
-  await page.goto(url, { waitUntil: "networkidle", timeout: 60000 }).catch(async () => { await page.goto(url, { waitUntil: "load", timeout: 60000 }); });
+  await page.goto(url, { waitUntil: "load", timeout: 60000 });
+  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});  // WebGL/analytics sites never go idle
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(wait);
   for (const s of scrolls) {

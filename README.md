@@ -25,11 +25,27 @@ Re-run it any time to update: it's idempotent.
 ```sh
 openflow doctor                 # read-only check of everything below, per harness
 openflow doctor --live          # + OpenCode live test: frontend summons every specialist, each consults its consultant
+openflow fix                    # find what's broken and repair it (see below)
+openflow fix --dry-run          # show the repairs without making them
 openflow install --only opencode,claude          # limit to some harnesses
 openflow install --skip plugins,agents           # skip steps (tools, skills, mcp, plugins, agents)
 openflow install --dry-run                       # print what would change
 openflow list                                    # which harnesses were detected
 ```
+`openflow fix` checks everything and repairs what it can:
+- **Tools:** git, npx, uv, serena, headroom, the Playwright browsers, and the `vf` script dependencies.
+- **Skills:** missing or outdated ones, including OpenFlow's own, which are compared file by file with the repo.
+- **GitHub MCP:** the server binary and its wrapper.
+- **Blender:** the add-on.
+- **MCP servers:** each one gets a live probe (start it, list its tools) and, if it fails, a targeted repair followed by a re-probe:
+  - npx servers: the cached package is cleared and fetched again;
+  - uv tools: reinstalled;
+  - GitHub: the binary is downloaded again.
+- **Harness configs:** missing MCP entries are added. An entry that points at a file that no longer exists, or fails its probe while OpenFlow's definition works, is replaced (with a backup). Entries you've disabled are left alone.
+- **OpenCode fleet:** agent and command files that are missing or outdated are reinstalled.
+
+What it can't do on its own (`gh auth login`, installing Chrome, network problems) it lists with the exact command. It exits 1 while anything is left.
+
 Passing flags through the one-liner: `… | bash -s -- --only opencode` (macOS/Linux), or on Windows:
 `& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Vasiniks/OpenFlow/main/install.ps1))) --only opencode`
 
@@ -107,10 +123,13 @@ make the sections pin and scrub on scroll                          # or just des
 Every change goes through a measured loop:
 1. `vf capture` and `vf compare` measure pixels and layout.
 2. `vf teardown` of the build measures its motion, assets and 3D. Against the reference that gives **motion parity**; for original work, the **award gates**.
-3. The critic returns at most 5 must-fix issues. Fake assets and missing choreography are automatically P0.
-4. The orchestrator fixes only those, and `vf track` guards against regressions.
+3. The critic gives every inventory row a status and lists all P0/P1 findings. Fake assets, missing choreography and missing measurements are automatically P0.
+4. The orchestrator fixes all P0 and P1 and loops (up to 8 rounds) until:
+   - the inventory is done;
+   - feel parity is ≥ 90% (or the award gates pass);
+   - the critic reports 0 P0.
 
-It stops on the best iteration, and only after a fresh critic verdict. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), per-agent tools: [docs/AGENTS.md](docs/AGENTS.md).
+   Then it stops once, with two A/B alternatives, for your feedback. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), per-agent tools: [docs/AGENTS.md](docs/AGENTS.md).
 
 ## Safety
 

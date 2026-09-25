@@ -9,26 +9,33 @@
 //   runtime + bundle analysis: eases, durations, ScrollTrigger configs), three.json (live three.js scene: lights,
 //   materials, tone mapping), shaders/ (every GLSL program compiled), assets/ (fonts, models, HDRIs, lottie, rive,
 //   largest images) + assets.json.
-import { chromium } from "playwright-core";
 import { PNG } from "pngjs";
 import { mkdirSync, writeFileSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { join, extname } from "node:path";
 import { createHash } from "node:crypto";
+import { launch, glRenderer } from "./browser.mjs";
 
 const args = process.argv.slice(2);
 const url = args[0];
 const opt = (k, d) => { const i = args.indexOf(`--${k}`); return i > -1 ? args[i + 1] : d; };
 const flag = (k) => args.includes(`--${k}`);
-if (!url || url.startsWith("--")) { console.error("usage: teardown <url> --out <dir> [--pages 6] [--viewport 1440x900] [--no-video] [--no-assets] [--steps 28]"); process.exit(2); }
+if (!url || url.startsWith("--")) { console.error("usage: teardown <url> --out <dir> [--pages 12] [--budget 480] [--viewport 1440x900] [--no-video] [--no-assets] [--steps 28]"); process.exit(2); }
 const OUT = opt("out", "./teardown");
 const [VW, VH] = opt("viewport", "1440x900").split("x").map(Number);
 const MAX_PAGES = Number(opt("pages", "12")), MAX_STEPS = Number(opt("steps", "28"));
 const VIDEO = !flag("no-video"), ASSETS = !flag("no-assets");
+// Time budget (s). Each phase gets a share and is cut short when its share is spent. Results are written after
+// every phase, and a watchdog writes whatever exists if the run is still going 60 s past the budget.
+// The default fits inside a 10-minute agent shell timeout.
+const BUDGET_MS = Number(opt("budget", "480")) * 1000, T0 = Date.now();
+const past = (share) => Date.now() - T0 > BUDGET_MS * share;
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 for (const d of ["intro", "steps", "states", "pages", "shaders", "assets"]) mkdirSync(join(OUT, d), { recursive: true });
-const log = (s) => console.error(`[teardown] ${s}`);
+const log = (s) => console.error(`[teardown] ${Math.round((Date.now() - T0) / 1000)}s ${s}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const save = (f, o) => writeFileSync(join(OUT, f), typeof o === "string" ? o : JSON.stringify(o, null, 1));
+// Never let one hung page call eat the budget.
+const within = (p, ms, fallback = null) => Promise.race([Promise.resolve(p).catch(() => fallback), sleep(ms).then(() => fallback)]);
 
 // ------------------------------------------------------------------------------------------------ page hooks
 // Installed before any site code runs: capture GLSL, the live three.js scene/renderer, canvas context types, rAF rate.
@@ -184,7 +191,14 @@ function analyzeBundles(texts) {
 
 // ------------------------------------------------------------------------------------------------ main
 const origin = new URL(url).origin;
-const browser = await chromium.launch({ headless: true, args: ["--ignore-gpu-blocklist", "--enable-webgl", "--autoplay-policy=no-user-gesture-required"] });
+const browser = await launch();
+// Results so far; finalize() can write them at any point (after each phase, or from the watchdog).
+let stack0 = { libs: {}, canvases: [], videos: [], fonts: [], docHeight: 0 }, stack = null, rafPerSec = 0, cands = [], wheelTravel = 0, virtualScroll = false, gl = "unknown";
+let motion = { scroll_linked: [], reveals: [], pinned: [], fixed: [] }, hovers = [], cursor = { custom_cursor: false }, pointer = [], states = [];
+let three = null, shaders = [], transitions = [], frames = [], pages = [], links = [];
+const phasesDone = [], phasesCut = [];
+const norm = (u) => u.split("#")[0].split("?")[0].replace(/\/$/, "");
+const seen = new Set([norm(url)]);
 const ctxOpts = (video) => ({ viewport: { width: VW, height: VH }, userAgent: UA, deviceScaleFactor: 1, ...(video && VIDEO ? { recordVideo: { dir: join(OUT, "_video"), size: { width: VW, height: VH } } } : {}) });
 
 const bundleTexts = [], assets = new Map();
@@ -214,7 +228,10 @@ function watchNetwork(page) {
         entry.bytes = buf.length;
         if (kind === "json" && !/"layers"\s*:/.test(buf.slice(0, 20000).toString())) { assets.delete(u); return; }  // keep only Lottie JSON
         const cext = ext || ({ "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/avif": ".avif", "image/svg+xml": ".svg", "image/gif": ".gif", "font/woff2": ".woff2", "font/woff": ".woff" }[entry.type] || "");
-        const name = `${kind}-${createHash("sha1").update(u).digest("hex").slice(0, 8)}${cext}`;
+        // keep the source file name readable (image-intro01-2c7afe47.webp); assets.json maps every file back to its URL
+      // last two path segments, so /interview/takashidoi01/hero-top.webp → takashidoi01-hero-top
+      const stem = decodeURIComponent(new URL(u).pathname.split("/").filter(Boolean).slice(-2).join("-")).replace(/\.[^.]*$/, "").replace(/[^a-z0-9_-]+/gi, "-").slice(-48).replace(/^-+/, "");
+      const name = `${kind}-${stem ? `${stem}-` : ""}${createHash("sha1").update(u).digest("hex").slice(0, 8)}${cext}`;
         writeFileSync(join(OUT, "assets", name), buf); entry.saved = `assets/${name}`;
       }
     } catch {}
@@ -242,42 +259,46 @@ let introReadyMs = 0;
 }
 
 // ---- 2. main pass: stack, three.js, shaders, motion map by scroll steps, hovers, cursor, states, links
-log("main pass");
+log(`main pass (${browser.__gl} WebGL)`);
+setTimeout(() => { log("budget exceeded, writing partial results"); try { finalize(); } catch (e) { log(`finalize: ${e.message}`); } process.exit(0); }, BUDGET_MS + 60000).unref();
 const ctx = await browser.newContext(ctxOpts(false)); await ctx.addInitScript(INIT);
 const page = await ctx.newPage(); watchNetwork(page);
-await page.goto(url, { waitUntil: "networkidle", timeout: 90000 }).catch(() => page.waitForTimeout(8000));
+await page.goto(url, { waitUntil: "load", timeout: 60000 }).catch((e) => log(`goto: ${e.message}`));
+await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});  // WebGL/analytics sites never go idle
 await sleep(Math.max(4000, introReadyMs + 1500));
-const stack0 = await page.evaluate(pageStack);
-const raf0 = await page.evaluate(() => window.__td?.raf || 0); await sleep(1000);
-const rafPerSec = (await page.evaluate(() => window.__td?.raf || 0)) - raf0;
-const cands = await page.evaluate(tagCandidates, 320);
+gl = await glRenderer(page);
+stack0 = (await within(page.evaluate(pageStack), 15000)) || stack0;
+const raf0 = await within(page.evaluate(() => window.__td?.raf || 0), 5000, 0); await sleep(1000);
+rafPerSec = (await within(page.evaluate(() => window.__td?.raf || 0), 5000, 0)) - raf0;
+cands = (await within(page.evaluate(tagCandidates, 320), 30000)) || [];
 const samples = [];
 const stepPx = Math.round(VH * 0.5);
-let stuck = 0, wheelTravel = 0;
+const sample = () => within(page.evaluate(sampleCandidates), 10000);
+let stuck = 0;
 const pageMoved = [true];  // pageMoved[s] = content moved between step s-1 and s
 for (let s = 0; s < MAX_STEPS; s++) {
+  if (past(0.4) && s >= 4) { phasesCut.push(`scroll motion map stopped at step ${s} of ${MAX_STEPS} (${Math.round(wheelTravel / VH)} screens); the rest of the page is only in the scroll sheets`); break; }
   const series = [];
-  for (const t of [0, 250, 600, 1100]) { if (t) await sleep(t - (series.length ? [0, 250, 600, 1100][series.length - 1] : 0)); series.push({ t, ...(await page.evaluate(sampleCandidates)) }); }
+  for (const t of [0, 250, 600, 1100]) { if (t) await sleep(t - (series.length ? series[series.length - 1].t : 0)); const r = await sample(); if (r) series.push({ t, ...r }); }
+  if (!series.length) { phasesCut.push(`page stopped answering at step ${s}`); break; }
   samples.push(series);
-  await page.screenshot({ path: join(OUT, "steps", `s${String(s).padStart(2, "0")}.jpg`), quality: 62, type: "jpeg" }).catch(() => {});
+  await within(page.screenshot({ path: join(OUT, "steps", `s${String(s).padStart(2, "0")}.jpg`), quality: 62, type: "jpeg" }), 15000);
   // wheel like a person (works with Lenis/Locomotive/virtual scrollers, unlike scrollTo)
   await page.mouse.move(VW / 2, VH / 2);
   for (let k = 0; k < 8; k++) { await page.mouse.wheel(0, stepPx / 8); await sleep(30); }
   await sleep(500);
   // "did the page move?" measured on content, not scrollY, so virtual scrollers (transform-based) work too
-  const nowTops = (await page.evaluate(sampleCandidates)).res;
+  const nowTops = (await sample())?.res || {};
   const prevTops = series[series.length - 1].res;
   const deltas = Object.keys(nowTops).map((k) => Math.abs(nowTops[k][0] - (prevTops[k]?.[0] ?? nowTops[k][0])));
   const moved = deltas.filter((d) => d > 20).length / Math.max(1, deltas.length) > 0.15;
   pageMoved.push(moved);
   wheelTravel += moved ? stepPx : 0;
   stuck = moved ? 0 : stuck + 1;
-  if (stuck >= 2 && s > 1) { samples.push([{ t: 0, ...(await page.evaluate(sampleCandidates)) }]); pageMoved.push(false); break; }
+  if (stuck >= 2 && s > 1) { const r = await sample(); if (r) { samples.push([{ t: 0, ...r }]); pageMoved.push(false); } break; }
 }
-const virtualScroll = stack0.docHeight <= VH * 1.2 && wheelTravel > VH;
+virtualScroll = stack0.docHeight <= VH * 1.2 && wheelTravel > VH;
 // motion classification
-const motion = { scroll_linked: [], reveals: [], pinned: [], fixed: [] };
-const byI = Object.fromEntries(cands.map((c) => [c.i, c]));
 for (const c of cands) {
   const k = String(c.i);
   const finals = samples.map((ser) => ser[ser.length - 1].res[k]).filter(Boolean);
@@ -304,7 +325,7 @@ for (const c of cands) {
   }
   if (changes >= 2) {
     const tx = finals.filter((_, s) => inView[s]).map((f) => parseMatrix(f[3]));
-    motion.scroll_linked.push({ el: c.tag, text: c.text, cls: c.cls, props: [...props], range: { tx: [Math.min(...tx.map((m) => m.tx)), Math.max(...tx.map((m) => m.tx))].map(Math.round), ty: [Math.min(...tx.map((m) => m.ty)), Math.max(...tx.map((m) => m.ty))].map(Math.round), scale: [Math.min(...tx.map((m) => m.s)), Math.max(...tx.map((m) => m.s))].map((v) => +v.toFixed(2)) } });
+    motion.scroll_linked.push({ el: c.tag, text: c.text, cls: c.cls, split_part: c.split || undefined, props: [...props], range: { tx: [Math.min(...tx.map((m) => m.tx)), Math.max(...tx.map((m) => m.tx))].map(Math.round), ty: [Math.min(...tx.map((m) => m.ty)), Math.max(...tx.map((m) => m.ty))].map(Math.round), scale: [Math.min(...tx.map((m) => m.s)), Math.max(...tx.map((m) => m.s))].map((v) => +v.toFixed(2)) } });
     continue;
   }
   // reveal: within one step's time series the element animates, then stays put
@@ -326,11 +347,28 @@ for (const c of cands) {
 const splitRev = motion.reveals.filter((r) => r.split_part);
 motion.reveals = motion.reveals.filter((r) => !r.split_part);
 if (splitRev.length) motion.split_text = { parts_animated: splitRev.length, example: splitRev[0], props: [...new Set(splitRev.map((r) => r.prop))] };
+// split-text parts scrubbed by scroll: one entry per class with the spread of offsets, not one line per character
+const splitScroll = motion.scroll_linked.filter((r) => r.split_part);
+motion.scroll_linked = motion.scroll_linked.filter((r) => !r.split_part);
+if (splitScroll.length) {
+  const groups = {}; for (const r of splitScroll) (groups[r.cls.split(" ")[0]] ||= []).push(r);
+  motion.split_scroll = Object.entries(groups).map(([cls, rs]) => ({ cls, parts: rs.length, text: rs.map((r) => r.text).join("").slice(0, 40), props: [...new Set(rs.flatMap((r) => r.props))],
+    tx: [Math.min(...rs.map((r) => r.range.tx[0])), Math.max(...rs.map((r) => r.range.tx[1]))], ty: [Math.min(...rs.map((r) => r.range.ty[0])), Math.max(...rs.map((r) => r.range.ty[1]))] }));
+}
+phasesDone.push("scroll motion map");
+// runtime evidence (again before the transitions below navigate away and reset the hooks)
+const runtimeEvidence = async () => {
+  three = (await within(page.evaluate(threeScene), 10000)) || three;
+  for (const s of (await within(page.evaluate(() => window.__td?.shaders || []), 10000, []))) if (!shaders.includes(s)) shaders.push(s);
+  stack = { ...stack0, ...((await within(page.evaluate(pageStack), 15000)) || {}), raf_calls_per_sec: rafPerSec };
+};
+await runtimeEvidence();
+finalize();
 
 // hover map + custom cursor
 log("hover + cursor");
-await page.evaluate(() => window.scrollTo(0, 0)); await page.mouse.wheel(0, -99999); await sleep(1500);
-const hoverTargets = await page.evaluate(() => {
+await within(page.evaluate(() => window.scrollTo(0, 0)), 5000); await page.mouse.wheel(0, -99999); await sleep(1500);
+const hoverTargets = past(0.5) ? [] : await within(page.evaluate(() => {
   const out = [];
   for (const el of document.querySelectorAll("a,button,[role=button],[data-cursor],[class*=card],[class*=link],[class*=btn]")) {
     const r = el.getBoundingClientRect(); if (r.width < 20 || r.height < 12 || r.top < 0 || r.bottom > innerHeight) continue;
@@ -338,14 +376,14 @@ const hoverTargets = await page.evaluate(() => {
     if (out.length >= 24) break;
   }
   return out;
-});
-const snapHover = (i) => page.evaluate((i) => {
+}), 15000, []);
+const snapHover = (i) => within(page.evaluate((i) => {
   const el = document.querySelector(`[data-tdh="${i}"]`); if (!el) return null;
   const nodes = [el, ...el.querySelectorAll("*")].slice(0, 25);
   return nodes.map((n) => { const cs = getComputedStyle(n); return [n.tagName.toLowerCase(), cs.transform, cs.opacity, cs.color, cs.backgroundColor, cs.clipPath, cs.filter, cs.textDecorationLine, cs.letterSpacing, cs.borderColor, cs.boxShadow.slice(0, 40), cs.width]; });
-}, i);
-const hovers = [];
+}, i), 8000);
 for (const h of hoverTargets) {
+  if (past(0.52)) { phasesCut.push(`hover map stopped after ${hovers.length} of ${hoverTargets.length} targets`); break; }
   await page.mouse.move(5, VH - 5); await sleep(700);  // let the previous hover-out finish
   const a = await snapHover(h.i); if (!a) continue;
   await page.mouse.move(h.x, h.y, { steps: 6 }); await sleep(550);
@@ -364,8 +402,8 @@ for (const h of hoverTargets) {
   if (diff.length) hovers.push({ el: h.tag, text: h.text, changes: diff.slice(0, 5) });
   if (hovers.length === 4) await page.screenshot({ path: join(OUT, "states", "hover-example.jpg"), quality: 70, type: "jpeg" }).catch(() => {});
 }
-const cursor = await (async () => {
-  const pos = async () => page.evaluate(() => [...document.querySelectorAll("body *")].filter((e) => { const cs = getComputedStyle(e); return cs.position === "fixed" && cs.pointerEvents === "none"; }).map((e) => { const r = e.getBoundingClientRect(); return { cls: (e.className?.toString() || e.tagName).slice(0, 50), x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), blend: getComputedStyle(e).mixBlendMode }; }));
+cursor = await (async () => {
+  const pos = async () => within(page.evaluate(() => [...document.querySelectorAll("body *")].filter((e) => { const cs = getComputedStyle(e); return cs.position === "fixed" && cs.pointerEvents === "none"; }).map((e) => { const r = e.getBoundingClientRect(); return { cls: (e.className?.toString() || e.tagName).slice(0, 50), x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), blend: getComputedStyle(e).mixBlendMode }; })), 8000, []);
   await page.mouse.move(200, 200, { steps: 5 }); await sleep(600); const p1 = await pos();
   await page.mouse.move(900, 600, { steps: 8 }); await sleep(600); const p2 = await pos();
   const moved = p2.filter((b) => { const a = p1.find((x) => x.cls === b.cls); return a && Math.hypot(a.x - b.x, a.y - b.y) > 200 && b.w < 400; });
@@ -382,13 +420,14 @@ const cellDiff = (a, b) => { // % of pixels changed per 3×3 cell
     for (let y = Math.floor((cy * a.h) / 3); y < Math.floor(((cy + 1) * a.h) / 3); y++) for (let x = Math.floor((cx * a.w) / 3); x < Math.floor(((cx + 1) * a.w) / 3); x++) { const i = (y * a.w + x) * 3; t++; if (Math.abs(a.d[i] - b.d[i]) + Math.abs(a.d[i + 1] - b.d[i + 1]) + Math.abs(a.d[i + 2] - b.d[i + 2]) > 30) n++; }
     out.push(+((100 * n) / t).toFixed(1)); } return out; };
 const CELL = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"];
-const pointer = [];
+phasesDone.push("hover + cursor");
 for (const [label, dy] of [["top", 0], ["mid-page", Math.round(wheelTravel / 2)]]) {
   if (label === "mid-page" && !wheelTravel) continue;
+  if (past(0.6)) { phasesCut.push(`pointer probe skipped at ${label}`); break; }
   await page.mouse.move(VW / 2, VH / 2); await page.mouse.wheel(0, -99999); await sleep(900);
   for (let k = 0, left = dy; left > 0 && k < 60; k++, left -= 200) { await page.mouse.wheel(0, Math.min(200, left)); await sleep(40); }
   await sleep(1400);
-  const snapT = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll("[data-td]")].map((e) => [e.getAttribute("data-td"), getComputedStyle(e).transform])));
+  const snapT = () => within(page.evaluate(() => Object.fromEntries([...document.querySelectorAll("[data-td]")].map((e) => [e.getAttribute("data-td"), getComputedStyle(e).transform]))), 8000, {});
   await page.mouse.move(VW / 2, VH / 2, { steps: 4 }); await sleep(900);
   const base = small(PNG.sync.read(await page.screenshot({ type: "png" }))), baseT = await snapT();
   await sleep(700);  // ambient baseline: what changes with the mouse held still (idle WebGL, marquees, video)
@@ -406,10 +445,11 @@ for (const [label, dy] of [["top", 0], ["mid-page", Math.round(wheelTravel / 2)]
 function byIdx(k) { const c = cands.find((x) => String(x.i) === k); return c ? `${c.tag} "${c.text.slice(0, 24)}" .${(c.cls || "").split(" ")[0]}` : null; }
 
 // menu / tabs / other states
+phasesDone.push("pointer probe");
 log("states");
-const states = [];
 for (const sel of ["button[aria-expanded=false]", "[class*=burger]", "[class*=menu-toggle]", "[class*=menu] button", "[aria-label*=menu i]", "[role=tab]"]) {
-  const el = await page.$(sel); if (!el || !(await el.isVisible().catch(() => false))) continue;
+  if (past(0.64)) { phasesCut.push("menu/tab states"); break; }
+  const el = await within(page.$(sel), 5000); if (!el || !(await el.isVisible().catch(() => false))) continue;
   const name = sel.replace(/[^a-z]/gi, "").slice(0, 20);
   await el.click({ timeout: 2000 }).catch(() => {});
   for (const t of [120, 450, 1100]) { await sleep(t === 120 ? 120 : t - (t === 450 ? 120 : 450)); await page.screenshot({ path: join(OUT, "states", `${name}-${t}ms.jpg`), quality: 70, type: "jpeg" }).catch(() => {}); }
@@ -419,14 +459,14 @@ for (const sel of ["button[aria-expanded=false]", "[class*=burger]", "[class*=me
 }
 
 // runtime evidence first (the transition below navigates away and resets the hooks)
-const three = await page.evaluate(threeScene).catch(() => null);
-const shaders = await page.evaluate(() => window.__td?.shaders || []);
-const stack = { ...stack0, ...(await page.evaluate(pageStack)), raf_calls_per_sec: rafPerSec };
+await runtimeEvidence();
+phasesDone.push("states");
+finalize();
 
 // page transitions: click up to 3 different internal links and film each hand-off (and the way back)
-const transitions = [];
 for (let n = 0; n < 3; n++) {
-  const href = await page.evaluate(({ origin, done }) => { const a = [...document.querySelectorAll("header a[href], nav a[href], a[href]")].find((a) => a.href.startsWith(origin) && !done.includes(a.href.split("#")[0]) && a.href.split("#")[0] !== location.href.split("#")[0] && a.getBoundingClientRect().width > 0 && a.getBoundingClientRect().top >= 0 && a.getBoundingClientRect().top < innerHeight); if (!a) return null; document.querySelectorAll("[data-tdt]").forEach((e) => e.removeAttribute("data-tdt")); a.setAttribute("data-tdt", "1"); return a.href.split("#")[0]; }, { origin, done: transitions.map((t) => t.to) });
+  if (past(0.72)) { phasesCut.push(`page transitions stopped after ${n}`); break; }
+  const href = await within(page.evaluate(({ origin, done }) => { const a = [...document.querySelectorAll("header a[href], nav a[href], a[href]")].find((a) => a.href.startsWith(origin) && !done.includes(a.href.split("#")[0]) && a.href.split("#")[0] !== location.href.split("#")[0] && a.getBoundingClientRect().width > 0 && a.getBoundingClientRect().top >= 0 && a.getBoundingClientRect().top < innerHeight); if (!a) return null; document.querySelectorAll("[data-tdt]").forEach((e) => e.removeAttribute("data-tdt")); a.setAttribute("data-tdt", "1"); return a.href.split("#")[0]; }, { origin, done: transitions.map((t) => t.to) }), 8000);
   if (!href) break;
   await page.mouse.wheel(0, -99999); await sleep(600);
   const t0 = Date.now(); await page.click("[data-tdt]", { timeout: 3000, noWaitAfter: true }).catch(() => {});
@@ -438,22 +478,23 @@ for (let n = 0; n < 3; n++) {
   await sleep(2500);
   transitions.push({ to: href, client_side: spa, frames: shots, back });
 }
-const transition = transitions[0] || null;
+phasesDone.push("page transitions");
 
 // links for other pages
-const links = await page.evaluate((origin) => [...new Set([...document.querySelectorAll("a[href]")].map((a) => a.href.split("#")[0]).filter((h) => h.startsWith(origin) && !/\.(pdf|jpg|png|zip|mp4)$/i.test(h)))], origin);
+links = (await within(page.evaluate((origin) => [...new Set([...document.querySelectorAll("a[href]")].map((a) => a.href.split("#")[0]).filter((h) => h.startsWith(origin) && !/\.(pdf|jpg|png|zip|mp4)$/i.test(h)))], origin), 10000)) || [];
 
 // continuous human-speed scroll → a frame every ~0.7 screen → contact sheets (5×4 tiles of 360 px), built in Node
 log("scroll frames → contact sheets");
-await page.mouse.wheel(0, -99999); await page.evaluate(() => window.scrollTo(0, 0)); await sleep(1200);
-const frames = [];
+await page.mouse.wheel(0, -99999); await within(page.evaluate(() => window.scrollTo(0, 0)), 5000); await sleep(1200);
 {
-  const total = Math.max(await page.evaluate(() => document.documentElement.scrollHeight), wheelTravel + VH);  // virtual scrollers: use measured travel
+  const total = Math.max((await within(page.evaluate(() => document.documentElement.scrollHeight), 5000)) || stack0.docHeight, wheelTravel + VH);  // virtual scrollers: use measured travel
   const every = Math.max(1, Math.round((VH * 0.7) / 60));
   mkdirSync(join(OUT, "progress"), { recursive: true });
   for (let y = 0, n = 0; y < total + VH && n < 900 && frames.length < 60; y += 60, n++) {
+    if (past(0.86)) { phasesCut.push(`continuous scroll stopped at ${Math.round((100 * y) / total)}% of the page`); break; }
     if (n % every === 0) {
-      const png = PNG.sync.read(await page.screenshot({ type: "png" }));
+      const buf = await within(page.screenshot({ type: "png" }), 15000); if (!buf) continue;
+      const png = PNG.sync.read(buf);
       frames.push(png);
       // progress-indexed copy (720 px) so a build can be compared with the reference at the same point of the scroll
       const pct = String(Math.min(100, Math.round((100 * y) / Math.max(1, total - VH)))).padStart(3, "0");
@@ -481,12 +522,12 @@ await ctx.close();
 }
 
 // ---- 3. other pages (lighter pass: screenshots per step + stack)
-const pages = [];
+phasesDone.push("continuous scroll");
 // breadth-first crawl of the whole site: every page's own links join the queue (up to --pages)
-const norm = (u) => u.split("#")[0].split("?")[0].replace(/\/$/, "");
-const seen = new Set([norm(url)]), queue = [];
+const queue = [];
 for (const l of links) if (!seen.has(norm(l))) { seen.add(norm(l)); queue.push(l); }
 while (queue.length && pages.length < MAX_PAGES) {
+  if (past(0.97)) { phasesCut.push(`crawl stopped after ${pages.length} pages (${queue.length} queued)`); break; }
   const link = queue.shift();
   log(`page ${link}`);
   const c2 = await browser.newContext(ctxOpts(false)); await c2.addInitScript(INIT);
@@ -494,12 +535,13 @@ while (queue.length && pages.length < MAX_PAGES) {
   const slug = new URL(link).pathname.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root";
   mkdirSync(join(OUT, "pages", slug), { recursive: true });
   try {
-    await p2.goto(link, { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
+    await p2.goto(link, { waitUntil: "load", timeout: 45000 }).catch(() => {});
+    await p2.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
     await sleep(Math.max(2500, introReadyMs + 1500));  // same preloader budget as the home page
-    const st = await p2.evaluate(pageStack);
+    const st = (await within(p2.evaluate(pageStack), 15000)) || { title: "", docHeight: 0, libs: {}, canvases: [] };
     let n = 0, lastHash = "", same = 0;
     for (; n < 10; n++) {
-      const buf = await p2.screenshot({ path: join(OUT, "pages", slug, `s${n}.jpg`), quality: 60, type: "jpeg" });
+      const buf = await within(p2.screenshot({ path: join(OUT, "pages", slug, `s${n}.jpg`), quality: 60, type: "jpeg" }), 15000); if (!buf) break;
       const h = createHash("sha1").update(buf).digest("hex");
       same = h === lastHash ? same + 1 : 0; lastHash = h;
       if (same >= 1) break;  // screen stopped changing: end of page (works for virtual scrollers too)
@@ -509,13 +551,19 @@ while (queue.length && pages.length < MAX_PAGES) {
     pages.push({ url: link, slug, title: st.title, docHeight: st.docHeight, libs: st.libs, canvases: st.canvases.length, screenshots: n + 1 });
     const more = await p2.evaluate((origin) => [...document.querySelectorAll("a[href]")].map((a) => a.href.split("#")[0]).filter((h) => h.startsWith(origin) && !/\.(pdf|jpg|png|zip|mp4)$/i.test(h)), origin).catch(() => []);
     for (const l of more) if (!seen.has(norm(l))) { seen.add(norm(l)); queue.push(l); }
-    const sh = await p2.evaluate(() => window.__td?.shaders || []); for (const s of sh) if (!shaders.includes(s)) shaders.push(s);
+    const sh = await within(p2.evaluate(() => window.__td?.shaders || []), 8000, []); for (const s of sh) if (!shaders.includes(s)) shaders.push(s);
   } catch (e) { pages.push({ url: link, error: e.message.slice(0, 120) }); }
   await c2.close();
 }
 await browser.close();
+if (pages.length) phasesDone.push(`crawl (${pages.length} pages)`);
+console.log(finalize());
+process.exit(0);
 
-// ---- 4. write outputs
+// ---- 4. write outputs (also called after each phase and by the watchdog, so a cut-short run still leaves results)
+function finalize() {
+const transition = transitions[0] || null;
+const stackNow = stack || { ...stack0, raf_calls_per_sec: rafPerSec };
 const bundles = analyzeBundles(bundleTexts);
 const isBuiltin = (s) => /#define (STANDARD|PHYSICAL|PHONG|LAMBERT|BASIC|TOON|MATCAP|DEPTH|DISTANCE|NORMAL)\b|#define SHADER_NAME (Mesh|Points|Line|Shadow|Sprite)/.test(s) || /^\s*#version 300 es\s*\n#define varying in\s*\nlayout\(location = 0\) out highp vec4 pc_fragColor;[\s\S]*#include/.test(s);
 let custom = 0;
@@ -527,7 +575,7 @@ shaders.forEach((s, n) => {
 });
 const assetList = [...assets.values()];
 const byKind = (k) => assetList.filter((a) => a.kind === k);
-save("stack.json", { stack, bundles, cursor, pointer, pages, pages_found: seen.size, transitions, transition, intro_ready_ms: introReadyMs, virtual_scroll: virtualScroll });
+save("stack.json", { stack: stackNow, gl_renderer: gl, phases_done: phasesDone, phases_cut: phasesCut, bundles, cursor, pointer, pages, pages_found: seen.size, transitions, transition, intro_ready_ms: introReadyMs, virtual_scroll: virtualScroll });
 save("motion.json", motion);
 save("hover.json", { hovers, cursor });
 save("three.json", three || { note: "no three.js scene observed (not three.js, or three < r127 without the devtools hook)" });
@@ -536,13 +584,16 @@ save("states.json", states);
 
 const top = (arr, n = 6) => arr.slice(0, n).map(([k, v]) => `${k} ×${v}`).join(", ");
 const L = [];
-const screens = (virtualScroll ? wheelTravel + VH : stack.docHeight) / VH;
-L.push(`# Teardown: ${url}`, "", `Title: ${stack.title} · viewport ${VW}×${VH} · ${screens.toFixed(1)} screens${virtualScroll ? " · VIRTUAL SCROLL (content moved by transforms inside a fixed wrapper, e.g. ScrollSmoother / custom)" : ""} · ${pages.length} other page(s) crawled`, "");
+const screens = (virtualScroll ? wheelTravel + VH : stackNow.docHeight) / VH;
+L.push(`# Teardown: ${url}`, "", `Title: ${stackNow.title} · viewport ${VW}×${VH} · ${screens.toFixed(1)} screens${virtualScroll ? " · VIRTUAL SCROLL (content moved by transforms inside a fixed wrapper, e.g. ScrollSmoother / custom)" : ""} · ${pages.length} other page(s) crawled`, "");
+L.push(`WebGL: ${browser.__gl === "gpu" ? "GPU" : "SOFTWARE (SwiftShader), so heavy WebGL scenes run slowly and motion timing may be distorted"} (${gl}) · ${Math.round((Date.now() - T0) / 1000)} s of a ${BUDGET_MS / 1000} s budget`);
+if (phasesCut.length) L.push(`**PARTIAL:** cut short by the time budget: ${phasesCut.join("; ")}. Re-run with a larger \`--budget\` (or fewer \`--pages\`) if a missing part matters.`);
+L.push(`Phases completed: ${phasesDone.join(", ") || "intro only"}`, "");
 L.push("## Stack (runtime + bundle evidence)");
-L.push(`- runtime: ${JSON.stringify(stack.libs)}`);
+L.push(`- runtime: ${JSON.stringify(stackNow.libs)}`);
 L.push(`- bundle keywords: ${Object.entries(bundles.keyword_hits).sort((a, b) => b[1] - a[1]).slice(0, 24).map(([k, v]) => `${k}:${v}`).join(" · ")}`);
-L.push(`- canvases: ${stack.canvases.map((c) => `${c.ctx} ${c.w}×${c.h}${c.fixed ? " fixed" : ""} @${c.top}px`).join("; ") || "none"} · videos: ${stack.videos.length} · rAF calls/s: ${stack.raf_calls_per_sec}`);
-L.push(`- fonts loaded: ${stack.fonts.join(", ") || "none detected"}`);
+L.push(`- canvases: ${stackNow.canvases.map((c) => `${c.ctx} ${c.w}×${c.h}${c.fixed ? " fixed" : ""} @${c.top}px`).join("; ") || "none"} · videos: ${stackNow.videos.length} · rAF calls/s: ${stackNow.raf_calls_per_sec}`);
+L.push(`- fonts loaded: ${stackNow.fonts.join(", ") || "none detected"}`);
 L.push("", "## Motion vocabulary from the code");
 L.push(`- GSAP eases: ${top(bundles.gsap_eases, 8) || "—"}`, `- durations: ${top(bundles.durations, 8) || "—"} · staggers: ${top(bundles.staggers, 5) || "—"}`);
 L.push(`- ScrollTrigger start/end: ${top(bundles.scroll_starts, 5) || "—"} / ${top(bundles.scroll_ends, 5) || "—"} · scrub: ${top(bundles.scrub_values, 4) || "—"}`);
@@ -553,8 +604,9 @@ L.push("", "## Intro sequence", `Frames at 0.3–7 s after navigation: intro/t*.
 L.push("", "## Motion map (measured while wheel-scrolling)");
 if (!wheelTravel) L.push("- the page does NOT scroll: it's a one-screen layout; its motion lives in the intro, hovers, state toggles and page transitions below");
 L.push(`- intro finished ≈ ${introReadyMs ? `${introReadyMs} ms` : "unknown"} after navigation (first full-content frame)`);
-L.push(`- scroll-linked elements: ${motion.scroll_linked.length} · one-shot reveals: ${motion.reveals.length} · pinned: ${motion.pinned.length} · fixed UI: ${motion.fixed.length}${motion.split_text ? ` · split-text parts animated: ${motion.split_text.parts_animated} (${motion.split_text.props.join(", ")})` : ""}`);
+L.push(`- scroll-linked elements: ${motion.scroll_linked.length} · one-shot reveals: ${motion.reveals.length} · pinned: ${motion.pinned.length} · fixed UI: ${motion.fixed.length}${motion.split_text ? ` · split-text parts revealed: ${motion.split_text.parts_animated} (${motion.split_text.props.join(", ")})` : ""}${motion.split_scroll ? ` · split-text parts scrubbed: ${motion.split_scroll.reduce((a, g) => a + g.parts, 0)}` : ""}`);
 motion.pinned.slice(0, 6).forEach((p) => L.push(`- PINNED ${p.el} "${p.text}" .${p.cls.split(" ")[0]} for ${p.steps_pinned} steps`));
+(motion.split_scroll || []).forEach((g) => L.push(`- SCROLL-SCRUBBED SPLIT TEXT .${g.cls} "${g.text}": ${g.parts} parts, ${g.props.join("+")}, offsets x ${g.tx.join("…")}px y ${g.ty.join("…")}px, each scrubbed to its rest position (per-part scatter, not one block)`));
 motion.scroll_linked.slice(0, 12).forEach((p) => L.push(`- SCROLL-LINKED ${p.el} "${p.text}" .${p.cls.split(" ")[0]}: ${p.props.join("+")} (x ${p.range.tx.join("→")}px, y ${p.range.ty.join("→")}px, scale ${p.range.scale.join("→")})`));
 motion.reveals.slice(0, 14).forEach((p) => L.push(`- REVEAL ${p.el} "${p.text}" @step ${p.at_step}: ${p.prop} ${p.from.transform !== p.to.transform ? `${p.from.transform.slice(0, 40)} → ${p.to.transform.slice(0, 40)}` : ""} opacity ${p.from.opacity}→${p.to.opacity}${p.from.clip ? ` clip ${p.from.clip.slice(0, 40)} → ${String(p.to.clip).slice(0, 40)}` : ""} · ${typeof p.timing === "string" ? p.timing : `${p.timing.duration_ms}ms ${p.timing.ease}`}`));
 L.push("", "## Hover & cursor");
@@ -575,9 +627,9 @@ if (three) {
     s.materials.slice(0, 10).forEach((m) => L.push(`  - material ${m.type}${m.name ? ` "${m.name}"` : ""}: color ${m.color} rough ${m.roughness} metal ${m.metalness}${m.transmission ? ` transmission ${m.transmission} ior ${m.ior} thickness ${m.thickness}` : ""}${m.clearcoat ? ` clearcoat ${m.clearcoat}` : ""}${m.emissive && m.emissive !== "#000000" ? ` emissive ${m.emissive}` : ""} maps [${m.maps}]${m.customShader ? ` CUSTOM SHADER uniforms [${m.uniforms}]` : ""}`));
     s.meshes.slice(0, 8).forEach((m) => L.push(`  - ${m.type} ${m.geometry} ${m.verts} verts${m.instanced ? ` ×${m.instanced} instances` : ""} (${m.material})`));
   });
-} else L.push(`- no three.js scene observed${stack.canvases.some((c) => c.ctx.includes("webgl")) ? " — but a WebGL canvas exists: read shaders/custom-* (OGL / raw WebGL / Spline / other)" : ""}`);
+} else L.push(`- no three.js scene observed${stackNow.canvases.some((c) => c.ctx.includes("webgl")) ? " — but a WebGL canvas exists: read shaders/custom-* (OGL / raw WebGL / Spline / other)" : ""}`);
 L.push(`- shaders captured: ${shaders.length} (${custom} custom → shaders/custom-*). Custom shaders ARE the look: port them, don't approximate.`);
-L.push("", "## Assets (network)");
+L.push("", "## Assets (network)", "assets.json maps every saved file to its source URL. Files keep the last two URL segments in their name (image-<dir>-<file>-<hash>.webp): use that to put the right photo in the right place.");
 for (const k of ["font", "model", "hdri", "rive", "json", "video", "audio", "image"]) {
   const a = byKind(k); if (!a.length) continue;
   L.push(`- ${k} (${a.length}): ${a.sort((x, y) => (y.bytes || 0) - (x.bytes || 0)).slice(0, k === "image" ? 8 : 10).map((x) => `${x.saved || x.url.split("/").pop().slice(0, 50)}${x.bytes ? ` ${(x.bytes / 1024).toFixed(0)}KB` : ""}`).join(", ")}`);
@@ -585,4 +637,5 @@ for (const k of ["font", "model", "hdri", "rive", "json", "video", "audio", "ima
 L.push("", `## Pages (${pages.length} crawled of ${seen.size} internal URLs found)`, ...pages.map((p) => p.error ? `- ${p.url}: ERROR ${p.error}` : `- ${p.url} → pages/${p.slug}/s*.jpg (${p.screenshots} shots, ${(p.docHeight / VH).toFixed(1)} screens${p.canvases ? `, ${p.canvases} canvas` : ""})`));
 L.push("", "## Evidence to LOOK at (in this order)", "1. intro/t*.jpg (the first 7 seconds)", `2. scroll-sheet-*.png (${frames.length} frames of one continuous scroll, 5×4 per sheet, read left→right, top→bottom)`, "3. steps/s*.jpg for exact frames per half-screen", "4. states/*.jpg (menu, hover, pointer, every transition)", "5. pages/*/s*.jpg", "6. progress/p*.png: frames by scroll progress (0–100%), used by `vf feel` to pair reference and build");
 save("teardown.md", L.join("\n"));
-console.log(L.join("\n"));
+return L.join("\n");
+}

@@ -2,11 +2,13 @@
 // OpenFlow: skills, MCP servers, plugins and a frontend agent fleet for coding-agent harnesses.
 //   node openflow.mjs install [--only opencode,claude] [--skip tools,skills,mcp,plugins,agents] [--dry-run]
 //   node openflow.mjs doctor  [--only ...] [--live]
+//   node openflow.mjs fix     [--only ...] [--dry-run]   (detect what is broken and repair it)
 //   node openflow.mjs list
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { install } from "./lib/install.mjs";
 import { doctor } from "./lib/doctor.mjs";
+import { fix } from "./lib/fix.mjs";
 import { HARNESSES } from "./lib/harnesses.mjs";
 import { setDryRun, bold, dim } from "./lib/util.mjs";
 
@@ -23,10 +25,14 @@ if (cmd === "install") {
   process.exit(await install({ repo, only: opt("--only"), skip: new Set((opt("--skip") || "").split(",").filter(Boolean)) }));
 } else if (cmd === "doctor") {
   process.exit(await doctor({ repo, only: opt("--only"), live: flag("--live") }));
+} else if (cmd === "fix") {
+  setDryRun(flag("--dry-run"));
+  process.exit(await fix({ repo, only: opt("--only") }));
 } else if (cmd === "list") {
   for (const h of HARNESSES) console.log(`${h.detect() ? "✓" : "·"} ${h.name.padEnd(12)} ${dim(h.id)}`);
 } else {
-  console.log(`${bold("openflow")} install | doctor | list
+  console.log(`${bold("openflow")} install | doctor | fix | list
   install  --only opencode,claude,muse,codex,cursor,gemini   --skip tools,skills,mcp,plugins,agents   --dry-run
-  doctor   --only …   --live (OpenCode: summon every specialist and verify delegation)`);
+  doctor   --only …   --live (OpenCode: summon every specialist and verify delegation)
+  fix      --only …   --dry-run   (probe tools, browsers, skills, every MCP server and each harness's config; repair what's broken)`);
 }

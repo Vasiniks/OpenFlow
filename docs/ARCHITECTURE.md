@@ -190,3 +190,27 @@ Still open:
 - Teardown's hover probe misses some child-span CSS transitions (the critic flagged working hovers).
 - WebGL material setup still needs the critic's eye.
 - Runs take about 2 hours on Muse Spark.
+
+## Live test: one-shot `/recreate https://otsuka-air.jp/`, 2026-09-24/25
+
+**Setup:** OpenCode default model, `--agent frontend`, a fresh Next.js kit, no human input.
+
+**What worked:**
+- STEP 0–4 ran without stopping or asking:
+  - an 83-row inventory, with values taken from the live three.js scene;
+  - the reference's own images, fonts and glb models placed by asset-producer;
+  - specs from motion, 3D, interaction and architecture;
+  - builder tasks for the global layer, the hero with 3D, the chapters and every subpage, each followed by a green `npm run build`.
+- One builder task died with "Connection reset by server"; the orchestrator retried it by itself.
+- **The critic was honest.** Round 1 said "0 done / 22 partial / 60 missing of 82 · parity proxy ~35%" instead of claiming success.
+
+**What broke, and the fixes:**
+
+| Failure | Cause | Fix |
+|---|---|---|
+| `vf teardown` produced no report, on both the reference and the build | Headless-shell Chromium renders WebGL in software (SwiftShader). On this three.js site a scroll step took ~10 s (0.4 s on the GPU), so the teardown exceeded the agent's 600 s shell timeout. Its results were written only at the very end, so nothing survived. | GPU-backed headless (`browser.mjs`: Metal/D3D11, falling back to software). A `--budget` split across phases, with results written after every phase, a watchdog, and **PARTIAL** marking. The full-site teardown now takes 454 s: all phases, 6 pages, 3 barba transitions filmed. |
+| The orchestrator ticked STEP 5 and used pixel mismatch as a "parity proxy" | Nothing required the output file | "Verify every step by its file". `vf feel` refuses incomplete teardowns (exit 3), and the critic makes "measurement missing" the first P0. |
+| The build's page was 17,000 px against the reference's 44,335 px, so every pin and scrub ran about 2.6× too fast | Pacing wasn't an inventory item | Mandatory pacing rows (page length in screens, pin lengths); the build must match within ±15%. Added the `vf feel` row "home page length (screens)". |
+| Asset map: "person → hash assignment is representative" | Saved assets were named by hash with no URL map (assets.json was written only at the end), and curl was denied | Files are named after their URL (`image-takashidoi01-hero-top-<hash>.webp`), and assets.json is always written. asset-producer may `curl -fsSL`, `file` and `gltf-transform inspect`, and must place files by URL. |
+| `timeout 100 vf capture …` gave "command not found" | macOS has no `timeout` | Shell rules in `frontend.md`. |
+| `vf capture` waited up to 60 s for `networkidle` per page | WebGL and analytics sites never go idle | Wait for `load`, then `networkidle` for at most 8 s. |

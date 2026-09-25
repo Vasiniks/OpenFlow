@@ -16,6 +16,9 @@ mkdirSync(OUT, { recursive: true });
 const J = (d, f, def = {}) => { try { return JSON.parse(readFileSync(join(d, f), "utf8")); } catch { return def; } };
 const R = { stack: J(refDir, "stack.json"), motion: J(refDir, "motion.json"), hover: J(refDir, "hover.json"), three: J(refDir, "three.json"), assets: J(refDir, "assets.json", []) };
 const C = { stack: J(curDir, "stack.json"), motion: J(curDir, "motion.json"), hover: J(curDir, "hover.json"), three: J(curDir, "three.json"), assets: J(curDir, "assets.json", []) };
+// No stack.json = the teardown never got past its first phase. Refuse rather than report a meaningless parity.
+for (const d of [refDir, curDir]) if (!existsSync(join(d, "stack.json"))) { console.error(`vf feel: ${d}/stack.json missing: that teardown did not finish its main pass. Re-run \`vf teardown\` (it writes results within --budget, default 480 s) and check its teardown.md.`); process.exit(3); }
+const cut = [[refDir, R], [curDir, C]].filter(([, x]) => (x.stack.phases_cut || []).length).map(([d, x]) => `${d}: ${x.stack.phases_cut.join("; ")}`);
 
 // ------------------------------------------------------------------------------------------------ parity table
 const rows = [];
@@ -44,6 +47,10 @@ count("intro sequence (ms until content)", R.stack.intro_ready_ms || 0, C.stack.
 count("split-text blocks", libs(R).split_text_blocks || 0, libs(C).split_text_blocks || 0);
 count("one-shot reveals", (R.motion.reveals || []).length + (R.motion.split_text ? 1 : 0), (C.motion.reveals || []).length + (C.motion.split_text ? 1 : 0));
 count("scroll-linked elements", (R.motion.scroll_linked || []).length, (C.motion.scroll_linked || []).length);
+count("scroll-scrubbed split text", (R.motion.split_scroll || []).length, (C.motion.split_scroll || []).length);
+// pacing: the same story needs about the same scroll distance, or every pin and scrub runs too fast (or too slow)
+{ const scr = (x) => +(((x.stack.stack?.docHeight) || 0) / 900).toFixed(1), r = scr(R), c = scr(C), d = r ? Math.abs(c - r) / r : 0;
+  rows.push({ name: "home page length (screens)", ref: r, cur: c, st: !r ? "=" : d <= 0.15 ? "✓" : d <= 0.35 ? "~" : "✗", note: "within ±15% = same pacing" }); }
 count("pinned sections", Math.max((R.motion.pinned || []).length, libs(R).scrolltrigger?.pins || 0), Math.max((C.motion.pinned || []).length, libs(C).scrolltrigger?.pins || 0));
 set("easing vocabulary (top GSAP eases)", eases(R), eases(C));
 count("typical duration (s, median)", median(R.stack.bundles?.durations || []), median(C.stack.bundles?.durations || []), "compare the numbers, not the ratio");
@@ -103,6 +110,7 @@ made.push(sheet(st.map((f) => [f, join(refDir, "states", f), join(curDir, "state
 // ------------------------------------------------------------------------------------------------ report
 const missing = rows.filter((r) => r.st === "✗").map((r) => r.name), partial = rows.filter((r) => r.st === "~").map((r) => r.name);
 const L = [`# Feel parity: build vs reference`, "", `**Mechanism parity: ${parity}%** (${scored.filter((r) => r.st === "✓").length} matched · ${partial.length} partial · ${missing.length} missing of ${scored.length} mechanisms the reference uses)`, ""];
+if (cut.length) L.push(`**Partial teardown** (rows that depend on the missing phases undercount): ${cut.join(" · ")}`, "");
 L.push("A build is not \"close\" while anything below is ✗. Pixel similarity (`vf compare`) cannot see motion, interaction, transitions or 3D; this table can.", "");
 L.push("| mechanism | reference | build | status | note |", "|---|---|---|---|---|");
 for (const r of rows) L.push(`| ${r.name} | ${r.ref} | ${r.cur} | ${r.st} | ${r.note} |`);

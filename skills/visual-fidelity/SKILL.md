@@ -9,7 +9,9 @@ A visual claim is only valid if it points at a render. This skill turns "looks o
 
 ## Tool
 
-`VF=~/.agents/skills/visual-fidelity/scripts/vf` (installs its 3 pinned deps on first run and uses the cached Playwright Chromium).
+`VF=~/.agents/skills/visual-fidelity/scripts/vf` (installs its pinned deps on first run and uses the cached Playwright Chromium).
+
+It renders WebGL on the **GPU** (full Chromium with Metal on macOS or D3D11 on Windows) and falls back to software rendering (SwiftShader) only when no GPU channel launches. The difference matters: on otsuka-air.jp a scroll step took ~10 s with software GL and 0.4 s on the GPU. `teardown.md` states which one was used.
 
 ```bash
 $VF capture <url> --out .design/ref   --viewports 1440x900,390x844 [--scroll 0,0.5] [--wait 2500]
@@ -24,8 +26,12 @@ $VF compare .design/ref .design/cur/iter-N --out .design/cur/iter-N/compare
 ## Teardown: reverse-engineer a site (run it FIRST on any reference; run it on your own build before calling it done)
 
 ```bash
-$VF teardown <url> --out .design/ref/teardown --pages 20     # whole site, ~3–10 min
+$VF teardown <url> --out .design/ref/teardown --pages 20     # whole site; finishes within --budget (default 480 s)
 ```
+- **Time budget.** Each phase gets a share of `--budget` and is cut short when that share is spent. Results are written after every phase, and a watchdog writes whatever exists 60 s past the budget.
+- **When a phase was cut,** the header says **PARTIAL** and names what's missing. Re-run with a bigger `--budget` or fewer `--pages`, into another folder.
+- **Shell timeout.** Give the command a shell timeout of at least `budget + 120 s`.
+- **No `timeout` on macOS.** macOS has no `timeout` command.
 Read `teardown.md` first, then LOOK at the evidence it lists. It records:
 - **Intro:** frames at 0.3–7 s plus `intro.webm`; when the intro finished.
 - **Scroll:** contact sheets of one continuous human-speed scroll (`scroll-sheet-*.png`, 20 frames per sheet), plus a screenshot per half-screen.
@@ -37,6 +43,8 @@ Read `teardown.md` first, then LOOK at the evidence it lists. It records:
 - **Hover diffs** per link/button/card, summarised (e.g. "7× child div y0 → y-31 = text roll"), plus custom-cursor detection.
 - **Menu/tab states and a page transition,** each as a frame sequence.
 - **Other routes** (screenshots per step) and the **real assets:** fonts, glb/gltf/ktx2/hdr, Lottie JSON, Rive, the largest images.
+  - **`assets.json` maps every saved file to its source URL.**
+  - **File names** keep the last two URL segments (`image-takashidoi01-hero-top-1f36699d.webp`), so each photo can be put where the reference uses it.
 
 - **Pointer probe:** the regions that react when the mouse moves (ambient animation excluded), and the elements that move with the mouse (parallax, magnetic).
 - **Up to 3 page transitions** filmed there and back.
