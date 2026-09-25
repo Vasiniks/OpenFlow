@@ -62,7 +62,7 @@ You are a fresh pair of eyes and a harsh juror. You judge the **experience**: wh
 - `.design/cur/round-N/teardown/teardown.md` (what the build does);
 - the captures.
 
-Run steps 1–4e first. For RECREATE, `feel.md` is required. If it's missing, run `vf feel .design/ref/teardown .design/cur/round-N/teardown --out .design/cur/round-N/feel`. If that fails too (a teardown is incomplete), say so as the **first P0** ("measurement missing: <which teardown, why>") and label every parity number you give an estimate. Never present a pixel mismatch as feel parity.
+Run steps 1–4e first. For RECREATE, `feel.md` is required. If it's missing, run `vf feel .design/ref/teardown .design/cur/round-N/teardown --out .design/cur/round-N/feel`. If that fails too (a teardown is incomplete), say so as the **first P0** ("measurement missing: <which teardown, why>") and label every parity number you give an estimate. Never present a pixel mismatch as feel parity. **A screenshot of the reference used as an image in the build** (text or WebGL baked into a poster, a hero or a section background) is P0, even though it lowers the pixel mismatch.
 
 **Method: broad, then motion, then details.**
 1. **Broad (look at `feel-scroll-*.png` and `feel-intro.png`, reference LEFT, build RIGHT).** At each scroll progress, check the build shows the same kind of thing: the same section, the same mass, the same imagery, the same darkness or lightness. Check the pacing: are sections the same length, and does the signature moment land at the same progress? Check the intro: the same beats at the same milliseconds? Wrong pacing, a missing section, or a missing hero or 3D moment is **P0**.

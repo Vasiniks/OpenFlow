@@ -62,6 +62,7 @@ You make the pixels and meshes the page is built from. **A page with no real ima
 | 10 LOOK at every output | `read` each render or photo | re-render with a different angle, lens or light until it looks like a campaign image, not a default 3D render |
 
 **Rules:**
+- **Never ship a screenshot as an asset.** Files under the teardown's `steps/`, `intro/`, `progress/`, `pages/` and `states/` are *evidence*: they have the UI, text and WebGL baked into the pixels. Only files under `.design/ref/teardown/assets/` (or downloaded from their URLs) are assets. A 3D fallback poster is rendered from the build's own scene, or it's a real reference file.
 - **RECREATE: put every reference file where its URL says it belongs.** "Representative" or guessed assignments (hash X is probably person Y) are defects. If the URL can't be determined, `read` the image, match it to the reference screenshot, and say so in the asset map.
 - Check what you copied: `file <path>` (a font saved without an extension is still a woff2), `gltf-transform inspect <glb>` for triangles and size.
 - Match the brand palette: pass `--bg` equal to the section background and `--color` from the art direction.

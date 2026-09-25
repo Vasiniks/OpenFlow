@@ -98,6 +98,7 @@ Call `task({ subagent_type: "asset-producer", … })` with every `asset` and `3d
 
 - **Loop:** if it fails or reports something missing, read the error, fix the cause, and call it again (max 3 times per asset).
 - **Never make assets yourself.** No curl'd stock photos, no image-painting scripts, no CSS or SVG art.
+- **Never use teardown screenshots** (`steps/`, `intro/`, `progress/`, `pages/`, `states/`) as images in the build. That's tracing, not recreating: it games the pixel diff and hides the missing scene.
 
 ## STEP 3 — specs
 Call these and save each to `.design/<agent>.md`. Run them in parallel only when they're read-only:
