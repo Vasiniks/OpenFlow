@@ -198,12 +198,18 @@ function pathShape(pts, unit = "px") {
   pts = pts.filter(Boolean); if (pts.length < 4) return null;
   const span = Math.max(Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1])) - Math.min(...pts.map((p) => p[1])));
   if (span < (unit === "px" ? 24 : 0.05)) return null;
+  // a real curve spans both axes; a pinned-then-scrolled element (a vertical line with jumps) is not a loop
+  const xs = Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0])), ys = Math.max(...pts.map((p) => p[1])) - Math.min(...pts.map((p) => p[1]));
+  const flat = Math.min(xs, ys) / Math.max(xs, ys, 1e-9) < 0.2;
+  // repeated points (object parked while the page scrolls) would skew the centre: use each distinct position once
+  pts = pts.filter((p, i) => !i || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > span * 0.01);
+  if (pts.length < 4) return null;
   const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cy = pts.reduce((a, p) => a + p[1], 0) / pts.length;
   const ds = pts.map((p) => Math.hypot(p[0] - cx, p[1] - cy)), r = ds.reduce((a, d) => a + d, 0) / ds.length;
   const spread = r ? Math.sqrt(ds.reduce((a, d) => a + (d - r) ** 2, 0) / ds.length) / r : 1;
   let sweep = 0; for (let i = 1; i < pts.length; i++) { let d = Math.atan2(pts[i][1] - cy, pts[i][0] - cx) - Math.atan2(pts[i - 1][1] - cy, pts[i - 1][0] - cx); while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; sweep += d; }
   const deg = Math.round((sweep * 180) / Math.PI), grow = ds[ds.length - 1] - ds[0];
-  const shape = Math.abs(deg) >= 270 ? (Math.abs(grow) > r * 0.5 ? "spiral" : "loop/orbit") : Math.abs(deg) >= 60 && spread < 0.4 ? "arc" : "line/drift";  // ≥270°: sampling rarely catches a full turn
+  const shape = flat ? "line/drift" : Math.abs(deg) >= 270 ? (Math.abs(grow) > r * 0.5 ? "spiral" : "loop/orbit") : Math.abs(deg) >= 60 && spread < 0.4 ? "arc" : "line/drift";  // ≥270°: sampling rarely catches a full turn
   const k = Math.max(1, Math.ceil(pts.length / 12)), rnd = (v) => (unit === "px" ? Math.round(v) : +v.toFixed(2));
   return { shape, sweep_deg: deg, direction: deg >= 0 ? "clockwise on screen" : "counter-clockwise on screen", center: [rnd(cx), rnd(cy)], radius: rnd(r), radius_change: rnd(grow), unit, points: pts.filter((_, i) => i % k === 0).map((p) => p.map(rnd)) };
 }
@@ -318,6 +324,19 @@ const longPage = stack0.docHeight > VH * 1.2;
 const MAX_STEPS = STEPS_OPT ? Number(STEPS_OPT) : longPage ? Math.min(80, Math.max(28, Math.ceil(stack0.docHeight / (VH * 0.6)))) : 28;
 const stepPx = longPage ? Math.max(Math.round(VH * 0.5), Math.round(stack0.docHeight / MAX_STEPS)) : Math.round(VH * 0.5);
 const sample = () => within(page.evaluate(sampleCandidates), 10000);
+// Intros and preloaders often lock scrolling (otsuka-air.jp: ~5 s, longer on a slow connection). Wait until a wheel
+// actually moves the content, or the motion map ends after 2 steps thinking the page is over.
+const movedBetween = (a, b) => { if (!a || !b) return false; const ks = Object.keys(b.res); const d = ks.map((k) => Math.abs(b.res[k][0] - (a.res[k]?.[0] ?? b.res[k][0]))); return d.filter((x) => x > 20).length / Math.max(1, d.length) > 0.15; };
+if (stack0.docHeight > VH * 1.2 || cands.length) {
+  let ready = false;
+  for (let k = 0; k < 20 && !ready && !past(0.2); k++) {
+    const a = await sample(); await page.mouse.move(VW / 2, VH / 2); await page.mouse.wheel(0, 400); await sleep(900); const b = await sample();
+    ready = movedBetween(a, b);
+    if (ready) { await page.mouse.wheel(0, -2000); await sleep(1200); } else await sleep(1500);
+  }
+  if (!ready) phasesCut.push("the page never scrolled (intro/preloader lock or a click-to-enter gate): the motion map may be empty");
+  else log("scroll unlocked");
+}
 let stuck = 0;
 const pageMoved = [true];  // pageMoved[s] = content moved between step s-1 and s
 const threeSteps = [];
@@ -341,7 +360,7 @@ for (let s = 0; s < MAX_STEPS; s++) {
   pageMoved.push(moved);
   wheelTravel += moved ? stepPx : 0;
   stuck = moved ? 0 : stuck + 1;
-  if (stuck >= 2 && s > 1) { const r = await sample(); if (r) { samples.push([{ t: 0, ...r }]); pageMoved.push(false); } break; }
+  if (stuck >= 3 && s > 3) { const r = await sample(); if (r) { samples.push([{ t: 0, ...r }]); pageMoved.push(false); } break; }
 }
 virtualScroll = stack0.docHeight <= VH * 1.2 && wheelTravel > VH;
 threeTraj = { camera: null, objects: [] };
@@ -360,8 +379,9 @@ threeTraj = { camera: null, objects: [] };
     }).filter(Boolean);
     // many objects on the same kind of path (e.g. 30 photo planes on one loop) → one group line
     const groups = new Map();
-    for (const o of per) { const k = `${o.kind}|${o.path.shape}|${Math.sign(o.path.sweep_deg)}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o); }
-    threeTraj.objects = [...groups.values()].map((g) => ({ count: g.length, kind: g[0].kind, names: [...new Set(g.map((o) => o.name).filter(Boolean))].slice(0, 5), shape: g[0].path.shape, unit: g[0].path.unit,
+    for (const o of per) { const k = `${o.kind}|${o.path.shape === "line/drift" ? "line" : "curve"}|${Math.sign(o.path.sweep_deg)}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o); }
+    const majority = (g) => { const c = {}; for (const o of g) c[o.path.shape] = (c[o.path.shape] || 0) + 1; return Object.entries(c).sort((a, b) => b[1] - a[1])[0][0]; };
+    threeTraj.objects = [...groups.values()].map((g) => ({ count: g.length, kind: g[0].kind, names: [...new Set(g.map((o) => o.name).filter(Boolean))].slice(0, 5), shape: majority(g), unit: g[0].path.unit,
       sweep_deg: Math.round(g.reduce((a, o) => a + o.path.sweep_deg, 0) / g.length), radius: +(g.reduce((a, o) => a + o.path.radius, 0) / g.length).toFixed(2), center: g[0].path.center, direction: g[0].path.direction, spin: g.some((o) => o.spin), example_points: g[0].path.points }))
       .sort((a, b) => (a.shape === "line/drift") - (b.shape === "line/drift") || b.count - a.count).slice(0, 12);
   }
