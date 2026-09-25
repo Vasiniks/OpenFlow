@@ -38,7 +38,10 @@ const three = (x) => x.three?.renderers ? x.three : null;
 const lights = (x) => (three(x)?.scenes || []).reduce((n, s) => n + (s.lights?.length || 0), 0);
 const matTypes = (x) => [...new Set((three(x)?.scenes || []).flatMap((s) => (s.materials || []).map((m) => m.type)))];
 const shaderCount = (d) => (existsSync(join(d, "shaders")) ? readdirSync(join(d, "shaders")).filter((f) => f.startsWith("custom-")).length : 0);
-const fams = (x) => [...new Set((x.stack.stack?.fonts || []).map((f) => f.replace(/\s\d+.*$/, "").replace(/Fallback$/, "").trim()).filter((f) => f && !/^(GeistSans|Arial|Helvetica)$/.test(f)))];
+// "Family weight style" → a family key. Self-hosted copies get renamed ("tazugane" vs "TazuganeGothicStdN-Regular"),
+// so compare the first 7 letters, lowercased. Obfuscated webfont names (fpbf_…) and generic fallbacks are dropped.
+const fams = (x) => [...new Set((x.stack.stack?.fonts || []).map((f) => f.replace(/\s+\S+\s+\S+$/, "").replace(/\s*Fallback$/i, "").trim())
+  .filter((f) => f && !/^(GeistSans|Geist|Arial|Helvetica|fpbf_\w+)$/i.test(f)).map((f) => f.toLowerCase().replace(/[^a-z]/g, "").slice(0, 7)))];
 const akind = (x, k) => x.assets.filter((a) => a.kind === k).length;
 
 bool("smooth scroll", smooth(R) !== "native", smooth(C) !== "native", `${smooth(R)} → ${smooth(C)}`);
