@@ -564,9 +564,10 @@ finalize();
 // page transitions: click up to 3 different internal links and film each hand-off (and the way back)
 for (let n = 0; n < 3; n++) {
   if (past(0.77)) { phasesCut.push(`page transitions stopped after ${n}`); break; }
-  const href = await within(page.evaluate(({ origin, done }) => { const a = [...document.querySelectorAll("header a[href], nav a[href], a[href]")].find((a) => a.href.startsWith(origin) && !done.includes(a.href.split("#")[0]) && a.href.split("#")[0] !== location.href.split("#")[0] && a.getBoundingClientRect().width > 0 && a.getBoundingClientRect().top >= 0 && a.getBoundingClientRect().top < innerHeight); if (!a) return null; document.querySelectorAll("[data-tdt]").forEach((e) => e.removeAttribute("data-tdt")); a.setAttribute("data-tdt", "1"); return a.href.split("#")[0]; }, { origin, done: transitions.map((t) => t.to) }), 8000);
+  await page.mouse.wheel(0, -99999); await within(page.evaluate(() => window.scrollTo(0, 0)), 3000); await sleep(900);  // top first: many headers hide on scroll-down
+  const href = await within(page.evaluate(({ origin, done }) => { const a = [...document.querySelectorAll("header a[href], nav a[href], a[href]")].find((a) => a.href.startsWith(origin) && !done.includes(a.href.split("#")[0]) && a.href.split("#")[0] !== location.href.split("#")[0] && a.getBoundingClientRect().width > 0 && getComputedStyle(a).visibility !== "hidden"); if (!a) return null; document.querySelectorAll("[data-tdt]").forEach((e) => e.removeAttribute("data-tdt")); a.setAttribute("data-tdt", "1"); if (a.getBoundingClientRect().top < 0 || a.getBoundingClientRect().top > innerHeight) a.scrollIntoView({ block: "center" }); return a.href.split("#")[0]; }, { origin, done: transitions.map((t) => t.to) }), 8000);
   if (!href) break;
-  await page.mouse.wheel(0, -99999); await sleep(600);
+  await sleep(600);
   const t0 = Date.now(); await page.click("[data-tdt]", { timeout: 3000, noWaitAfter: true }).catch(() => {});
   const shots = [];
   for (const t of [100, 300, 600, 1000, 1600]) { await sleep(Math.max(0, t - (Date.now() - t0))); const f = `states/transition${n + 1}-${t}ms.jpg`; await page.screenshot({ path: join(OUT, f), quality: 65, type: "jpeg" }).catch(() => {}); shots.push(f); }
